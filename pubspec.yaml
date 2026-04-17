@@ -49,6 +49,12 @@ dependencies:
 
   flutter_native_splash: ^2.3.10
 
+  flutter_cashfree_pg_sdk: 2.2.10+48
+  mime: ^1.0.4
+  image_picker: ^1.0.5
+  open_file: ^3.3.2
+  permission_handler: ^11.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

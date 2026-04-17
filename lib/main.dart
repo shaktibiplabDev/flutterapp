@@ -11,6 +11,10 @@ import 'screens/auth/verify_email_screen.dart';
 import 'screens/auth/google_phone_screen.dart';
 import 'screens/auth/setup_password_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/home/wallet_screen.dart';
+import 'screens/home/vehicles_screen.dart';
+import 'screens/home/bookings_screen.dart';
+import 'screens/home/profile_screen.dart';
 import 'screens/auth/email_verification_required_screen.dart';
 
 void main() {
@@ -55,6 +59,10 @@ class MyApp extends StatelessWidget {
           '/google-phone': (context) => const GooglePhoneScreen(),
           '/setup-password': (context) => const SetupPasswordScreen(),
           '/home': (context) => const HomeScreen(),
+          '/wallet': (context) => const WalletScreen(),
+          '/vehicles': (context) => const VehiclesScreen(),
+          '/bookings': (context) => const BookingsScreen(),
+          '/profile': (context) => const ProfileScreen(),
           '/email-verification-required': (context) {
             final args = ModalRoute.of(context)!.settings.arguments as String?;
             return EmailVerificationRequiredScreen(email: args ?? '');

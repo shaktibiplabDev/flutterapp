@@ -18,13 +18,24 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   late Animation<double> _logoAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _rotationAnimation;
+  
+  String _loadingMessage = "Initializing...";
+  int _loadingStep = 0;
+  final List<String> _loadingMessages = [
+    "Initializing...",
+    "Checking credentials...",
+    "Loading dashboard...",
+    "Almost there...",
+  ];
 
   @override
   void initState() {
     super.initState();
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1800),
       vsync: this,
     );
 
@@ -35,55 +46,125 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: const Interval(0.2, 0.5, curve: Curves.easeOutBack),
+        curve: const Interval(0.2, 0.6, curve: Curves.easeOutBack),
       ),
     );
 
     _logoAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: const Interval(0.3, 0.8, curve: Curves.easeOutCubic),
+        curve: const Interval(0.3, 0.7, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.5, 0.8, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _rotationAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
       ),
     );
 
     _animationController.forward();
-
+    
+    // Simulate loading steps
+    _startLoadingSimulation();
+    
+    // Check auth after animation
     Future.delayed(const Duration(milliseconds: 2800), () {
-      _navigateToNextScreen();
+      _checkAuthAndNavigate();
     });
   }
 
-  Future<void> _navigateToNextScreen() async {
+  void _startLoadingSimulation() {
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        setState(() {
+          _loadingStep = 1;
+          _loadingMessage = _loadingMessages[1];
+        });
+      }
+    });
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (mounted) {
+        setState(() {
+          _loadingStep = 2;
+          _loadingMessage = _loadingMessages[2];
+        });
+      }
+    });
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (mounted) {
+        setState(() {
+          _loadingStep = 3;
+          _loadingMessage = _loadingMessages[3];
+        });
+      }
+    });
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
     if (!mounted) return;
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      await authProvider.loadStoredAuthData();
+      
       final isAuthenticated = authProvider.isAuthenticated;
-
+      
       if (isAuthenticated) {
         await authProvider.refreshUser();
-        if (mounted) {
+        
+        if (authProvider.isAuthenticated && mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(
+              builder: (context) => const HomeScreen(),
+              settings: const RouteSettings(name: '/home'),
+            ),
+          );
+        } else if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const LoginScreen(),
+              settings: const RouteSettings(name: '/login'),
+            ),
           );
         }
       } else {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            MaterialPageRoute(
+              builder: (context) => const LoginScreen(),
+              settings: const RouteSettings(name: '/login'),
+            ),
           );
         }
       }
     } catch (e) {
+      print('Auth check error: $e');
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+            settings: const RouteSettings(name: '/login'),
+          ),
         );
       }
     }
@@ -102,201 +183,457 @@ class _SplashScreenState extends State<SplashScreen>
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Colors.grey.shade50,
-              Colors.grey.shade100,
-            ],
+      body: Stack(
+        children: [
+          // Animated Background Gradient
+          AnimatedBuilder(
+            animation: _animationController,
+            builder: (context, child) {
+              return Container(
+                width: double.infinity,
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white,
+                      Colors.grey.shade50,
+                      Colors.grey.shade100.withOpacity(0.8),
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
+                ),
+              );
+            },
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Spacer for balanced layout
-              const Spacer(flex: 1),
+          
+          // Animated Background Circles
+          ..._buildBackgroundCircles(screenWidth, screenHeight),
+          
+          SafeArea(
+            child: Column(
+              children: [
+                // Top decorative element
+                SlideTransition(
+                  position: _slideAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 20),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 2,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.grey.shade400,
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                
+                const Spacer(flex: 2),
+                
+                // Main Animation Section
+                _buildAnimationSection(screenHeight, screenWidth),
+                
+                const Spacer(flex: 1),
+                
+                // App Name Section
+                _buildAppNameSection(),
+                
+                const Spacer(flex: 1),
+                
+                // Loading Section
+                _buildLoadingSection(),
+                
+                const SizedBox(height: 20),
+                
+                // Powered by Section
+                _buildPoweredBySection(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              // Animation Section
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: SizedBox(
-                  height: screenHeight * 0.45,
-                  width: screenWidth * 0.85,
-                  child: Lottie.asset(
-                    'assets/animations/car_loading.json',
-                    fit: BoxFit.contain,
-                    repeat: true,
-                    animate: true,
-                    errorBuilder: (context, error, stackTrace) {
+  List<Widget> _buildBackgroundCircles(double width, double height) {
+    return [
+      // Top-right circle
+      Positioned(
+        top: -50,
+        right: -50,
+        child: AnimatedBuilder(
+          animation: _rotationAnimation,
+          builder: (context, child) {
+            return Transform.rotate(
+              angle: _rotationAnimation.value * 3.14,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.grey.shade200.withOpacity(0.3),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      
+      // Bottom-left circle
+      Positioned(
+        bottom: -80,
+        left: -80,
+        child: AnimatedBuilder(
+          animation: _rotationAnimation,
+          builder: (context, child) {
+            return Transform.rotate(
+              angle: -_rotationAnimation.value * 2.14,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.grey.shade200.withOpacity(0.2),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      
+      // Center decorative circle
+      Positioned(
+        left: width / 2 - 100,
+        top: height / 2 - 100,
+        child: AnimatedBuilder(
+          animation: _scaleAnimation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: 0.5 + (_scaleAnimation.value * 0.3),
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.grey.shade100.withOpacity(0.4),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildAnimationSection(double screenHeight, double screenWidth) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: TweenAnimationBuilder(
+        tween: Tween<double>(begin: 0.8, end: 1.0),
+        duration: const Duration(milliseconds: 1000),
+        builder: (context, double scale, child) {
+          return Transform.scale(
+            scale: scale,
+            child: Container(
+              height: screenHeight * 0.4,
+              width: screenWidth * 0.8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.shade200,
+                    blurRadius: 30,
+                    spreadRadius: 10,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(200),
+                child: Lottie.asset(
+                  'assets/animations/car_loading.json',
+                  fit: BoxFit.contain,
+                  repeat: true,
+                  animate: true,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.shade300,
+                            blurRadius: 20,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.directions_car,
+                        size: 100,
+                        color: Colors.grey.shade600,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAppNameSection() {
+    return SlideTransition(
+      position: _slideAnimation,
+      child: FadeTransition(
+        opacity: _logoAnimation,
+        child: Column(
+          children: [
+            // App Name with enhanced styling
+            ShaderMask(
+              shaderCallback: (bounds) {
+                return LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.grey.shade900,
+                    Colors.grey.shade700,
+                    Colors.grey.shade600,
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                ).createShader(bounds);
+              },
+              child: const Text(
+                'EKiraya',
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: -1,
+                  height: 1.2,
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Tagline with animated underline
+            Stack(
+              children: [
+                Text(
+                  'Your Vehicle Rental Partner',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade500,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Positioned(
+                  bottom: -4,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedBuilder(
+                    animation: _logoAnimation,
+                    builder: (context, child) {
                       return Container(
+                        width: 100 * _logoAnimation.value,
+                        height: 2,
+                        margin: const EdgeInsets.symmetric(horizontal: 20),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.directions_car,
-                          size: 100,
-                          color: Colors.grey.shade400,
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.grey.shade400,
+                              Colors.grey.shade300,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       );
                     },
                   ),
                 ),
+              ],
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Version badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
               ),
-
-              const Spacer(flex: 1),
-
-              // Logo and Title Section
-              ScaleTransition(
-                scale: _scaleAnimation,
-                child: FadeTransition(
-                  opacity: _logoAnimation,
-                  child: Column(
-                    children: [
-                      // Logo Container
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.asset(
-                            'assets/images/logo_splash_dark.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                Icons.home_work,
-                                size: 40,
-                                color: Colors.grey.shade600,
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // App Name
-                      ShaderMask(
-                        shaderCallback: (bounds) {
-                          return LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.grey.shade900,
-                              Colors.grey.shade700,
-                            ],
-                          ).createShader(bounds);
-                        },
-                        child: const Text(
-                          'EKiraya',
-                          style: TextStyle(
-                            fontSize: 42,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // Subtitle
-                      Text(
-                        'Your Vehicle Rental Partner',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade500,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
+              child: Text(
+                'Version 2.0.0',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey.shade500,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-              const Spacer(flex: 1),
+  Widget _buildLoadingSection() {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Column(
+        children: [
+          // Animated progress indicator
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey.shade700),
+              backgroundColor: Colors.grey.shade200,
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Animated dots
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(3, (index) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 500),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: _loadingStep >= index ? 8 : 4,
+                height: _loadingStep >= index ? 8 : 4,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _loadingStep >= index 
+                      ? Colors.grey.shade700 
+                      : Colors.grey.shade300,
+                ),
+              );
+            }),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Loading message with fade animation
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Text(
+              _loadingMessage,
+              key: ValueKey(_loadingMessage),
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+                letterSpacing: 0.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              // Loading Indicator
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.grey.shade600,
-                        backgroundColor: Colors.grey.shade200,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Loading...',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade400,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
+  Widget _buildPoweredBySection() {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + 20,
+        ),
+        child: Column(
+          children: [
+            // Decorative line
+            Container(
+              width: 120,
+              height: 1,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Colors.grey.shade300,
+                    Colors.transparent,
                   ],
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // Powered by Text
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).padding.bottom + 16,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 1,
-                        color: Colors.grey.shade300,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Powered by Versaero',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade400,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        width: 40,
-                        height: 1,
-                        color: Colors.grey.shade300,
-                      ),
-                    ],
+            ),
+            
+            // Powered by text with icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.flash_on,
+                  size: 12,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Powered by Versaero',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade400,
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.bolt,
+                  size: 12,
+                  color: Colors.grey.shade400,
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Copyright text
+            Text(
+              '© ${DateTime.now().year} EKiraya. All rights reserved.',
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.grey.shade300,
+                letterSpacing: 0.3,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
