@@ -260,69 +260,53 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   PreferredSizeWidget _buildAppBar(int walletAmount) {
     return AppBar(
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Text(
-              'EK',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'iraya',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-              letterSpacing: -0.5,
-            ),
-          ),
-        ],
+      leadingWidth: 120,
+      title: const Text(
+        'Dashboard',
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 22,
+          letterSpacing: -0.5,
+        ),
       ),
       backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
+      foregroundColor: Colors.grey.shade900,
       elevation: 0,
-      leading: const SizedBox.shrink(),
-      actions: [
-        GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const WalletScreen()),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.account_balance_wallet_outlined, size: 18, color: Colors.grey.shade700),
-                const SizedBox(width: 6),
-                Text(
+      leading: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const WalletScreen()),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 18,
+                color: Colors.grey.shade700,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
                   '₹${_formatWalletAmount(walletAmount)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: Colors.grey.shade900,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
+      actions: [
         IconButton(
           icon: Stack(
             children: [
@@ -331,8 +315,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 right: 0,
                 top: 0,
                 child: Container(
-                  width: 8,
-                  height: 8,
+                  width: 10,
+                  height: 10,
                   decoration: const BoxDecoration(
                     color: Colors.red,
                     shape: BoxShape.circle,
@@ -681,18 +665,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.grey.shade900,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  _showComingSoon();
-                },
-                child: Text(
-                  'View All',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
                 ),
               ),
             ],
