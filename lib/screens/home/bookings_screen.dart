@@ -8,11 +8,13 @@ import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 import 'home_screen.dart';
 import 'vehicles_screen.dart';
 import 'profile_screen.dart';
 import 'wallet_screen.dart';
-import 'rental_detail_screen.dart'; // Add this import
+import 'rental_detail_screen.dart';
+import 'notifications_screen.dart';
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({super.key});
@@ -35,11 +37,13 @@ class _BookingsScreenState extends State<BookingsScreen> {
   bool _isProcessing = false;
   Timer? _liveTicker;
   DateTime _now = DateTime.now();
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadUnreadNotificationCount();
     _startLiveTicker();
   }
 
@@ -57,6 +61,30 @@ class _BookingsScreenState extends State<BookingsScreen> {
         _now = DateTime.now();
       });
     });
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getUnreadNotificationsCount();
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading unread notification count: $e');
+    }
+  }
+
+  Future<void> _navigateToNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+    );
+    
+    // Refresh unread count when coming back from notifications screen
+    await _loadUnreadNotificationCount();
   }
 
   Future<void> _loadData() async {
@@ -1256,31 +1284,25 @@ class _BookingsScreenState extends State<BookingsScreen> {
           actions: [
             IconButton(
               icon: Stack(
+                alignment: Alignment.center,
                 children: [
                   Icon(Icons.notifications_none, color: Colors.grey.shade700),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
+                  if (_unreadNotificationCount > 0)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Notifications coming soon'),
-                    backgroundColor: Colors.grey,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onPressed: _navigateToNotifications,
             ),
           ],
         ),
@@ -1349,31 +1371,25 @@ class _BookingsScreenState extends State<BookingsScreen> {
         actions: [
           IconButton(
             icon: Stack(
+              alignment: Alignment.center,
               children: [
                 Icon(Icons.notifications_none, color: Colors.grey.shade700),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
+                if (_unreadNotificationCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Notifications coming soon'),
-                  backgroundColor: Colors.grey,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onPressed: _navigateToNotifications,
           ),
         ],
       ),
@@ -1634,7 +1650,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                             ),
                                             decoration: BoxDecoration(
                                               color:
-                                                  statusColor.withValues(alpha: 0.1),
+                                                  statusColor.withOpacity(0.1),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
@@ -1803,15 +1819,11 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                             vertical: 8,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.green.withValues(
-                                              alpha: 0.08,
-                                            ),
+                                            color: Colors.green.withOpacity(0.08),
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                             border: Border.all(
-                                              color: Colors.green.withValues(
-                                                alpha: 0.25,
-                                              ),
+                                              color: Colors.green.withOpacity(0.25),
                                             ),
                                           ),
                                           child: Row(
@@ -1852,15 +1864,11 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                             vertical: 8,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.orange.withValues(
-                                              alpha: 0.08,
-                                            ),
+                                            color: Colors.orange.withOpacity(0.08),
                                             borderRadius:
                                                 BorderRadius.circular(8),
                                             border: Border.all(
-                                              color: Colors.orange.withValues(
-                                                alpha: 0.25,
-                                              ),
+                                              color: Colors.orange.withOpacity(0.25),
                                             ),
                                           ),
                                           child: Row(

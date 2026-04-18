@@ -1011,6 +1011,92 @@ class ApiService {
     return json.decode(response.body);
   }
 
+  // ==================== NOTIFICATIONS MANAGEMENT ====================
+
+  // Get all notifications with pagination
+  Future<Map<String, dynamic>> getNotifications({
+    int perPage = 20,
+    int page = 1,
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = {
+      'per_page': perPage.toString(),
+      'page': page.toString(),
+    };
+
+    final uri = Uri.parse('$baseUrl/notifications')
+        .replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+
+    return json.decode(response.body);
+  }
+
+  // Get unread notifications count
+  Future<Map<String, dynamic>> getUnreadNotificationsCount() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/notifications/unread-count'),
+      headers: headers,
+    );
+
+    return json.decode(response.body);
+  }
+
+  // Mark a single notification as read
+  Future<Map<String, dynamic>> markNotificationAsRead(int notificationId) async {
+    final headers = await getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/notifications/$notificationId/read'),
+      headers: headers,
+    );
+
+    return json.decode(response.body);
+  }
+
+  // Mark all notifications as read
+  Future<Map<String, dynamic>> markAllNotificationsAsRead() async {
+    final headers = await getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/notifications/mark-all-read'),
+      headers: headers,
+    );
+
+    return json.decode(response.body);
+  }
+
+  // Get notifications statistics
+  Future<Map<String, dynamic>> getNotificationsStatistics() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/notifications/statistics'),
+      headers: headers,
+    );
+
+    return json.decode(response.body);
+  }
+
+  // Delete a single notification
+  Future<Map<String, dynamic>> deleteNotification(int notificationId) async {
+    final headers = await getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/notifications/$notificationId'),
+      headers: headers,
+    );
+
+    return json.decode(response.body);
+  }
+
+  // Delete all notifications
+  Future<Map<String, dynamic>> deleteAllNotifications() async {
+    final headers = await getHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/notifications'),
+      headers: headers,
+    );
+
+    return json.decode(response.body);
+  }
+
   // ==================== REPORTS MANAGEMENT ====================
 
   // Get reports summary

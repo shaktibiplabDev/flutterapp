@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 import 'home_screen.dart';
 import 'vehicles_screen.dart';
 import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'wallet_screen.dart';
+import 'notifications_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -31,6 +33,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   bool _isLoading = true;
   bool _isLoadingWallet = true;
   int _walletBalance = 0;
+  int _unreadNotificationCount = 0;
 
   final List<String> _tabs = ['Overview', 'Rentals', 'Vehicles', 'Customers', 'Documents'];
 
@@ -39,6 +42,31 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     super.initState();
     _loadData();
     _loadWalletBalance();
+    _loadUnreadNotificationCount();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getUnreadNotificationsCount();
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading unread notification count: $e');
+    }
+  }
+
+  Future<void> _navigateToNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+    );
+    
+    // Refresh unread count when coming back from notifications screen
+    await _loadUnreadNotificationCount();
   }
 
   Future<void> _loadData() async {
@@ -295,22 +323,25 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         ),
         IconButton(
           icon: Stack(
+            alignment: Alignment.center,
             children: [
               Icon(Icons.notifications_none, color: Colors.grey.shade700),
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+              if (_unreadNotificationCount > 0)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notifications coming soon'), backgroundColor: Colors.grey),
-          ),
+          onPressed: _navigateToNotifications,
         ),
       ],
     );

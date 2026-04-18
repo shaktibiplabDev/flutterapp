@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 import '../../services/payment_service.dart';
 import 'home_screen.dart';
 import 'vehicles_screen.dart';
 import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'transaction_detail_screen.dart';
-import 'transactions_list_screen.dart';  // Add this import
+import 'transactions_list_screen.dart';
+import 'notifications_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -24,6 +26,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   Map<String, dynamic> _summary = {};
   final TextEditingController _amountController = TextEditingController();
   late AnimationController _animationController;
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
@@ -33,6 +36,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       duration: const Duration(milliseconds: 800),
     );
     _loadWalletData();
+    _loadUnreadNotificationCount();
     _animationController.forward();
   }
 
@@ -41,6 +45,30 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     _animationController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getUnreadNotificationsCount();
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading unread notification count: $e');
+    }
+  }
+
+  Future<void> _navigateToNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+    );
+    
+    // Refresh unread count when coming back from notifications screen
+    await _loadUnreadNotificationCount();
   }
 
   Future<void> _loadWalletData() async {
@@ -342,6 +370,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           (status == 'completed' || status == 'success')) {
         _showSuccessDialog('Payment successful! Wallet balance updated.');
         await _loadWalletData();
+        await _loadUnreadNotificationCount();
       } else if (response['success'] == true &&
           (status == 'pending' || status == 'processing')) {
         _showInfoDialog('Payment is still pending. Please check again shortly.');
@@ -502,28 +531,25 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
           actions: [
             IconButton(
               icon: Stack(
+                alignment: Alignment.center,
                 children: [
                   Icon(Icons.notifications_none, color: Colors.grey.shade700),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  if (_unreadNotificationCount > 0)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Notifications coming soon'),
-                    backgroundColor: Colors.grey,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onPressed: _navigateToNotifications,
             ),
           ],
         ),
@@ -548,33 +574,33 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         actions: [
           IconButton(
             icon: Stack(
+              alignment: Alignment.center,
               children: [
                 Icon(Icons.notifications_none, color: Colors.grey.shade700),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                if (_unreadNotificationCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Notifications coming soon'),
-                  backgroundColor: Colors.grey,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onPressed: _navigateToNotifications,
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadWalletData,
+        onRefresh: () async {
+          await _loadWalletData();
+          await _loadUnreadNotificationCount();
+        },
         color: Colors.black,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

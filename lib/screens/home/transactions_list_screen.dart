@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 import 'home_screen.dart';
 import 'vehicles_screen.dart';
 import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'transaction_detail_screen.dart';
+import 'notifications_screen.dart';
 
 class TransactionsListScreen extends StatefulWidget {
   const TransactionsListScreen({super.key});
@@ -36,6 +38,9 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
   bool _isLoadingMore = false;
   
   final ScrollController _scrollController = ScrollController();
+  
+  // Notifications
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
@@ -45,6 +50,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
       duration: const Duration(milliseconds: 800),
     );
     _loadTransactions();
+    _loadUnreadNotificationCount();
     _animationController.forward();
     _scrollController.addListener(_onScroll);
   }
@@ -64,6 +70,30 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
     }
   }
 
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getUnreadNotificationsCount();
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading unread notification count: $e');
+    }
+  }
+
+  Future<void> _navigateToNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+    );
+    
+    // Refresh unread count when coming back from notifications screen
+    await _loadUnreadNotificationCount();
+  }
+
   Future<void> _loadTransactions({bool reset = true}) async {
     if (reset) {
       setState(() {
@@ -77,12 +107,9 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
     try {
-      // Note: startDate and endDate are prepared for future API implementation
-      // The API currently doesn't support date filtering, but keeping for future use
       final startDate = _selectedDateRange?.start.toIso8601String().split('T').first;
       final endDate = _selectedDateRange?.end.toIso8601String().split('T').first;
       
-      // Log for debugging - can be removed in production
       if (startDate != null && endDate != null) {
         print('Date filter: $startDate to $endDate');
       }
@@ -451,241 +478,118 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
         actions: [
           IconButton(
             icon: Stack(
+              alignment: Alignment.center,
               children: [
                 Icon(Icons.notifications_none, color: Colors.grey.shade700),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                if (_unreadNotificationCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Notifications coming soon'),
-                  backgroundColor: Colors.grey,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onPressed: _navigateToNotifications,
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Filter Bar
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                // Date Range Button
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _showDateRangePicker,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await _loadTransactions();
+          await _loadUnreadNotificationCount();
+        },
+        color: Colors.black,
+        child: Column(
+          children: [
+            // Filter Bar
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  // Date Range Button
+                  Expanded(
+                    flex: 3,
+                    child: GestureDetector(
+                      onTap: _showDateRangePicker,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _selectedDateRange == null
+                                    ? 'Select Date Range'
+                                    : '${_formatDate(_selectedDateRange!.start.toIso8601String())} - ${_formatDate(_selectedDateRange!.end.toIso8601String())}',
+                                style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (_selectedDateRange != null)
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedDateRange = null;
+                                  });
+                                  _loadTransactions();
+                                },
+                                child: Icon(Icons.close, size: 16, color: Colors.grey.shade500),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Filter Button
+                  GestureDetector(
+                    onTap: _showFilterBottomSheet,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
+                        color: (_selectedType != null || _selectedStatus != null) 
+                            ? Colors.black 
+                            : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: Colors.grey.shade200),
                       ),
-                      child: Row(
+                      child: Stack(
                         children: [
-                          Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade700),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _selectedDateRange == null
-                                  ? 'Select Date Range'
-                                  : '${_formatDate(_selectedDateRange!.start.toIso8601String())} - ${_formatDate(_selectedDateRange!.end.toIso8601String())}',
-                              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          Icon(
+                            Icons.filter_list,
+                            size: 20,
+                            color: (_selectedType != null || _selectedStatus != null) 
+                                ? Colors.white 
+                                : Colors.grey.shade700,
                           ),
-                          if (_selectedDateRange != null)
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedDateRange = null;
-                                });
-                                _loadTransactions();
-                              },
-                              child: Icon(Icons.close, size: 16, color: Colors.grey.shade500),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Filter Button
-                GestureDetector(
-                  onTap: _showFilterBottomSheet,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: (_selectedType != null || _selectedStatus != null) 
-                          ? Colors.black 
-                          : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Stack(
-                      children: [
-                        Icon(
-                          Icons.filter_list,
-                          size: 20,
-                          color: (_selectedType != null || _selectedStatus != null) 
-                              ? Colors.white 
-                              : Colors.grey.shade700,
-                        ),
-                        if (_selectedType != null || _selectedStatus != null)
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
+                          if (_selectedType != null || _selectedStatus != null)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Active Filters Row
-          if (_selectedType != null || _selectedStatus != null || _selectedDateRange != null)
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    if (_selectedType != null)
-                      _buildActiveFilterChip(
-                        label: 'Type: ${_selectedType![0].toUpperCase()}${_selectedType!.substring(1)}',
-                        onRemove: () {
-                          setState(() {
-                            _selectedType = null;
-                          });
-                          _loadTransactions();
-                        },
-                      ),
-                    if (_selectedStatus != null)
-                      _buildActiveFilterChip(
-                        label: 'Status: ${_selectedStatus![0].toUpperCase()}${_selectedStatus!.substring(1)}',
-                        onRemove: () {
-                          setState(() {
-                            _selectedStatus = null;
-                          });
-                          _loadTransactions();
-                        },
-                      ),
-                    if (_selectedDateRange != null)
-                      _buildActiveFilterChip(
-                        label: 'Date: ${_formatDate(_selectedDateRange!.start.toIso8601String())} - ${_formatDate(_selectedDateRange!.end.toIso8601String())}',
-                        onRemove: () {
-                          setState(() {
-                            _selectedDateRange = null;
-                          });
-                          _loadTransactions();
-                        },
-                      ),
-                    GestureDetector(
-                      onTap: _resetFilters,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Text(
-                          'Clear All',
-                          style: TextStyle(fontSize: 12, color: Colors.red.shade600, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          
-          // Summary Stats
-          if (_summary.isNotEmpty && _transactions.isNotEmpty)
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Total Credits', style: TextStyle(fontSize: 11, color: Colors.green.shade700)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '₹${_summary['total_credits'] ?? 0}',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Total Debits', style: TextStyle(fontSize: 11, color: Colors.red.shade700)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '₹${_summary['total_debits'] ?? 0}',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red.shade700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Net Change', style: TextStyle(fontSize: 11, color: Colors.blue.shade700)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '₹${(_summary['total_credits'] ?? 0) - (_summary['total_debits'] ?? 0)}',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
-                          ),
                         ],
                       ),
                     ),
@@ -693,44 +597,171 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
                 ],
               ),
             ),
-          
-          // Transactions List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.grey))
-                : _transactions.isEmpty
-                    ? Center(
+            
+            // Active Filters Row
+            if (_selectedType != null || _selectedStatus != null || _selectedDateRange != null)
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      if (_selectedType != null)
+                        _buildActiveFilterChip(
+                          label: 'Type: ${_selectedType![0].toUpperCase()}${_selectedType!.substring(1)}',
+                          onRemove: () {
+                            setState(() {
+                              _selectedType = null;
+                            });
+                            _loadTransactions();
+                          },
+                        ),
+                      if (_selectedStatus != null)
+                        _buildActiveFilterChip(
+                          label: 'Status: ${_selectedStatus![0].toUpperCase()}${_selectedStatus!.substring(1)}',
+                          onRemove: () {
+                            setState(() {
+                              _selectedStatus = null;
+                            });
+                            _loadTransactions();
+                          },
+                        ),
+                      if (_selectedDateRange != null)
+                        _buildActiveFilterChip(
+                          label: 'Date: ${_formatDate(_selectedDateRange!.start.toIso8601String())} - ${_formatDate(_selectedDateRange!.end.toIso8601String())}',
+                          onRemove: () {
+                            setState(() {
+                              _selectedDateRange = null;
+                            });
+                            _loadTransactions();
+                          },
+                        ),
+                      GestureDetector(
+                        onTap: _resetFilters,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            'Clear All',
+                            style: TextStyle(fontSize: 12, color: Colors.red.shade600, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            
+            // Summary Stats
+            if (_summary.isNotEmpty && _transactions.isNotEmpty)
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey.shade400),
-                            const SizedBox(height: 16),
+                            Text('Total Credits', style: TextStyle(fontSize: 11, color: Colors.green.shade700)),
+                            const SizedBox(height: 4),
                             Text(
-                              'No transactions found',
-                              style: TextStyle(fontSize: 16, color: Colors.grey.shade500),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Try adjusting your filters',
-                              style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
-                            ),
-                            const SizedBox(height: 24),
-                            ElevatedButton(
-                              onPressed: _resetFilters,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              child: const Text('Clear Filters'),
+                              '₹${_summary['total_credits'] ?? 0}',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () => _loadTransactions(),
-                        color: Colors.black,
-                        child: ListView.builder(
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Total Debits', style: TextStyle(fontSize: 11, color: Colors.red.shade700)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '₹${_summary['total_debits'] ?? 0}',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red.shade700),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Net Change', style: TextStyle(fontSize: 11, color: Colors.blue.shade700)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '₹${(_summary['total_credits'] ?? 0) - (_summary['total_debits'] ?? 0)}',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            // Transactions List
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Colors.grey))
+                  : _transactions.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey.shade400),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No transactions found',
+                                style: TextStyle(fontSize: 16, color: Colors.grey.shade500),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Try adjusting your filters',
+                                style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
+                              ),
+                              const SizedBox(height: 24),
+                              ElevatedButton(
+                                onPressed: _resetFilters,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: const Text('Clear Filters'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
                           controller: _scrollController,
                           padding: const EdgeInsets.all(16),
                           itemCount: _transactions.length + (_hasMore ? 1 : 0),
@@ -802,6 +833,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
                                       ),
                                       const SizedBox(width: 14),
                                       Expanded(
+                                        flex: 2,
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
@@ -820,11 +852,14 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
                                               children: [
                                                 Icon(Icons.calendar_today, size: 12, color: Colors.grey.shade500),
                                                 const SizedBox(width: 4),
-                                                Text(
-                                                  transaction['created_at_formatted'] ?? _formatDate(transaction['created_at']),
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey.shade500,
+                                                Flexible(
+                                                  child: Text(
+                                                    transaction['created_at_formatted'] ?? _formatDate(transaction['created_at']),
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey.shade500,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 const SizedBox(width: 12),
@@ -848,6 +883,7 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
                                           ],
                                         ),
                                       ),
+                                      const SizedBox(width: 12),
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.end,
                                         children: [
@@ -861,7 +897,11 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            transaction['reference_id']?.toString().substring(0, 12) ?? 'N/A',
+                                            (() {
+                                              final refId = transaction['reference_id']?.toString();
+                                              if (refId == null) return 'N/A';
+                                              return refId.length > 12 ? '${refId.substring(0, 12)}...' : refId;
+                                            })(),
                                             style: TextStyle(
                                               fontSize: 10,
                                               color: Colors.grey.shade400,
@@ -878,9 +918,9 @@ class _TransactionsListScreenState extends State<TransactionsListScreen> with Si
                             );
                           },
                         ),
-                      ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 import '../auth/verify_email_screen.dart';
 import 'wallet_screen.dart';
 import 'vehicles_screen.dart';
@@ -8,7 +9,8 @@ import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'add_vehicle_screen.dart';
 import 'new_rental_screen.dart';
-import 'reports_screen.dart'; // Add this import
+import 'reports_screen.dart';
+import 'notifications_screen.dart'; // Add this import
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<Map<String, dynamic>> _availableVehicles = [];
   List<Map<String, dynamic>> _recentBookings = [];
   Map<String, dynamic> _statistics = {};
+  int _unreadNotificationCount = 0;
   late AnimationController _animationController;
 
   @override
@@ -32,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       duration: const Duration(milliseconds: 800),
     );
     _loadDashboardData();
+    _loadUnreadNotificationCount();
     _animationController.forward();
   }
 
@@ -39,6 +43,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getUnreadNotificationsCount();
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading unread notification count: $e');
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -158,6 +176,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return _str(booking['vehicle_name'] ?? vehicle?['name'], fallback: 'Vehicle');
   }
 
+  void _navigateToNotifications() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+    );
+    
+    // Refresh unread count when coming back from notifications screen
+    if (result == true) {
+      await _loadUnreadNotificationCount();
+    } else {
+      // Even if no explicit result, refresh the count
+      await _loadUnreadNotificationCount();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -187,7 +220,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       backgroundColor: Colors.grey.shade50,
       appBar: _buildAppBar(walletAmount),
       body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
+        onRefresh: () async {
+          await _loadDashboardData();
+          await _loadUnreadNotificationCount();
+        },
         color: Colors.black,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -310,25 +346,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       actions: [
         IconButton(
           icon: Stack(
+            alignment: Alignment.center,
             children: [
               Icon(Icons.notifications_none, color: Colors.grey.shade700),
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+              if (_unreadNotificationCount > 0)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
-          onPressed: () {
-            _showNotificationComingSoon();
-          },
+          onPressed: _navigateToNotifications,
         ),
       ],
     );
@@ -1267,18 +1303,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } catch (e) {
       return 'N/A';
     }
-  }
-
-
-  void _showNotificationComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Notifications feature coming soon'),
-        backgroundColor: Colors.grey,
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 }
 

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 import 'home_screen.dart';
 import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'wallet_screen.dart';
 import 'add_vehicle_screen.dart';
 import 'new_rental_screen.dart';
+import 'notifications_screen.dart';
 
 class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({super.key});
@@ -23,11 +25,37 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   String _searchQuery = '';
   int _selectedIndex = 1;
   int _walletBalance = 0;
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadUnreadNotificationCount();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getUnreadNotificationsCount();
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('Error loading unread notification count: $e');
+    }
+  }
+
+  Future<void> _navigateToNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+    );
+    
+    // Refresh unread count when coming back from notifications screen
+    await _loadUnreadNotificationCount();
   }
 
   Future<void> _loadData() async {
@@ -800,31 +828,25 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
             ),
             IconButton(
               icon: Stack(
+                alignment: Alignment.center,
                 children: [
                   Icon(Icons.notifications_none, color: Colors.grey.shade700),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
+                  if (_unreadNotificationCount > 0)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Notifications coming soon'),
-                    backgroundColor: Colors.grey,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onPressed: _navigateToNotifications,
             ),
           ],
         ),
@@ -902,179 +924,177 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
           ),
           IconButton(
             icon: Stack(
+              alignment: Alignment.center,
               children: [
                 Icon(Icons.notifications_none, color: Colors.grey.shade700),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
+                if (_unreadNotificationCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Notifications coming soon'),
-                  backgroundColor: Colors.grey,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onPressed: _navigateToNotifications,
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: TextField(
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                },
-                decoration: InputDecoration(
-                  hintText: 'Search by name or number plate...',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(Icons.clear, color: Colors.grey.shade500),
-                          onPressed: () {
-                            setState(() {
-                              _searchQuery = '';
-                            });
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(16),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await _loadVehicles();
+          await _loadUnreadNotificationCount();
+        },
+        color: Colors.black,
+        child: Column(
+          children: [
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: TextField(
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or number plate...',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear, color: Colors.grey.shade500),
+                            onPressed: () {
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // Filter Chips
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  FilterChip(
-                    label: Text('All ($totalCount)',
-                        style: TextStyle(
-                          color: _selectedFilter == 'all'
-                              ? Colors.white
-                              : Colors.grey.shade700,
-                        )),
-                    selected: _selectedFilter == 'all',
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedFilter = 'all';
-                      });
-                    },
-                    backgroundColor: Colors.grey.shade100,
-                    selectedColor: Colors.black,
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: Text('Available ($availableCount)',
-                        style: TextStyle(
-                          color: _selectedFilter == 'available'
-                              ? Colors.white
-                              : Colors.grey.shade700,
-                        )),
-                    selected: _selectedFilter == 'available',
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedFilter = 'available';
-                      });
-                    },
-                    backgroundColor: Colors.grey.shade100,
-                    selectedColor: Colors.green,
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: Text('On Rent ($onRentCount)',
-                        style: TextStyle(
-                          color: _selectedFilter == 'on_rent'
-                              ? Colors.white
-                              : Colors.grey.shade700,
-                        )),
-                    selected: _selectedFilter == 'on_rent',
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedFilter = 'on_rent';
-                      });
-                    },
-                    backgroundColor: Colors.grey.shade100,
-                    selectedColor: Colors.orange,
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: Text('Unavailable ($unavailableCount)',
-                        style: TextStyle(
-                          color: _selectedFilter == 'unavailable'
-                              ? Colors.white
-                              : Colors.grey.shade700,
-                        )),
-                    selected: _selectedFilter == 'unavailable',
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedFilter = 'unavailable';
-                      });
-                    },
-                    backgroundColor: Colors.grey.shade100,
-                    selectedColor: Colors.red,
-                  ),
-                ],
+            // Filter Chips
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: Text('All ($totalCount)',
+                          style: TextStyle(
+                            color: _selectedFilter == 'all'
+                                ? Colors.white
+                                : Colors.grey.shade700,
+                          )),
+                      selected: _selectedFilter == 'all',
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = 'all';
+                        });
+                      },
+                      backgroundColor: Colors.grey.shade100,
+                      selectedColor: Colors.black,
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('Available ($availableCount)',
+                          style: TextStyle(
+                            color: _selectedFilter == 'available'
+                                ? Colors.white
+                                : Colors.grey.shade700,
+                          )),
+                      selected: _selectedFilter == 'available',
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = 'available';
+                        });
+                      },
+                      backgroundColor: Colors.grey.shade100,
+                      selectedColor: Colors.green,
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('On Rent ($onRentCount)',
+                          style: TextStyle(
+                            color: _selectedFilter == 'on_rent'
+                                ? Colors.white
+                                : Colors.grey.shade700,
+                          )),
+                      selected: _selectedFilter == 'on_rent',
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = 'on_rent';
+                        });
+                      },
+                      backgroundColor: Colors.grey.shade100,
+                      selectedColor: Colors.orange,
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('Unavailable ($unavailableCount)',
+                          style: TextStyle(
+                            color: _selectedFilter == 'unavailable'
+                                ? Colors.white
+                                : Colors.grey.shade700,
+                          )),
+                      selected: _selectedFilter == 'unavailable',
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = 'unavailable';
+                        });
+                      },
+                      backgroundColor: Colors.grey.shade100,
+                      selectedColor: Colors.red,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // Vehicles List
-          Expanded(
-            child: _filteredVehicles.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.directions_car_outlined,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No vehicles found',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey.shade500,
+            // Vehicles List
+            Expanded(
+              child: _filteredVehicles.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.directions_car_outlined,
+                            size: 64,
+                            color: Colors.grey.shade400,
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadVehicles,
-                    child: ListView.builder(
+                          const SizedBox(height: 16),
+                          Text(
+                            'No vehicles found',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: _filteredVehicles.length,
                       itemBuilder: (context, index) {
@@ -1321,9 +1341,9 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                         );
                       },
                     ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
