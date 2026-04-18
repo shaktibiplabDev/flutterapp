@@ -1056,6 +1056,171 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // ==================== REPORTS MANAGEMENT ====================
+
+  // Get reports summary
+  Future<Map<String, dynamic>> getReportsSummary({
+    bool forceRefresh = false,
+  }) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'reports:summary',
+        ttl: const Duration(minutes: 5),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getReportsSummary(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get earnings report
+  Future<Map<String, dynamic>> getReportsEarnings({
+    String? startDate,
+    String? endDate,
+    String? month,
+    String? year,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final cacheKey = 'reports:earnings:${startDate ?? 'na'}:${endDate ?? 'na'}:${month ?? 'na'}:${year ?? 'na'}';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(minutes: 5),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getReportsEarnings(
+          startDate: startDate,
+          endDate: endDate,
+          month: month,
+          year: year,
+        ),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get rentals report
+  Future<Map<String, dynamic>> getReportsRentals({
+    String? startDate,
+    String? endDate,
+    String? date,
+    String? status,
+    String? vehicleId,
+    String? customerId,
+    String? sortBy,
+    String? sortOrder,
+    int perPage = 15,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final cacheKey = 'reports:rentals:${startDate ?? 'na'}:${endDate ?? 'na'}:${date ?? 'na'}:${status ?? 'na'}:${vehicleId ?? 'na'}:${customerId ?? 'na'}:$perPage';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(minutes: 3),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getReportsRentals(
+          startDate: startDate,
+          endDate: endDate,
+          date: date,
+          status: status,
+          vehicleId: vehicleId,
+          customerId: customerId,
+          sortBy: sortBy,
+          sortOrder: sortOrder,
+          perPage: perPage,
+        ),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get top vehicles report
+  Future<Map<String, dynamic>> getReportsTopVehicles({
+    int limit = 10,
+    String? period,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final cacheKey = 'reports:topVehicles:$limit:${period ?? 'all_time'}';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(minutes: 10),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getReportsTopVehicles(
+          limit: limit,
+          period: period,
+        ),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get top customers report
+  Future<Map<String, dynamic>> getReportsTopCustomers({
+    int limit = 10,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final cacheKey = 'reports:topCustomers:$limit';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(minutes: 10),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getReportsTopCustomers(limit: limit),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get documents report
+  Future<Map<String, dynamic>> getReportsDocuments({
+    bool forceRefresh = false,
+  }) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'reports:documents',
+        ttl: const Duration(minutes: 5),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getReportsDocuments(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Export rentals report
+  Future<Map<String, dynamic>> exportRentalsReport({
+    String? startDate,
+    String? endDate,
+    String? date,
+    String? status,
+    String? vehicleId,
+    String? customerId,
+    String? sortBy,
+    String? sortOrder,
+    String format = 'csv',
+  }) async {
+    try {
+      return await _apiService.exportRentalsReport(
+        startDate: startDate,
+        endDate: endDate,
+        date: date,
+        status: status,
+        vehicleId: vehicleId,
+        customerId: customerId,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        format: format,
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // ==================== UTILITIES ====================
 
   // Refresh user data

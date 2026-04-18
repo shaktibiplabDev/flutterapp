@@ -27,8 +27,10 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
   
   // Phase 0 - Vehicle Selection
   List<Map<String, dynamic>> _availableVehicles = [];
+  List<Map<String, dynamic>> _filteredVehicles = [];
   Map<String, dynamic>? _selectedVehicle;
   bool _isLoadingVehicles = true;
+  String _searchQuery = '';
   
   // Phase 1 - Customer Verification
   final _customerFormKey = GlobalKey<FormState>();
@@ -93,16 +95,12 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         final data = response['data'];
         if (data is List) {
           _availableVehicles = List<Map<String, dynamic>>.from(data);
+          _filteredVehicles = List<Map<String, dynamic>>.from(data);
         } else if (data is Map && data.containsKey('vehicles')) {
           _availableVehicles = List<Map<String, dynamic>>.from(data['vehicles']);
+          _filteredVehicles = List<Map<String, dynamic>>.from(data['vehicles']);
         }
-        _availableVehicles.sort((a, b) {
-          final statusA = a['status']?.toString().toLowerCase() ?? '';
-          final statusB = b['status']?.toString().toLowerCase() ?? '';
-          if (statusA == 'available' && statusB != 'available') return -1;
-          if (statusA != 'available' && statusB == 'available') return 1;
-          return 0;
-        });
+        _filterVehicles();
       }
     } catch (e) {
       print('Error loading vehicles: $e');
@@ -111,6 +109,20 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         _isLoadingVehicles = false;
       });
     }
+  }
+
+  void _filterVehicles() {
+    if (_searchQuery.isEmpty) {
+      _filteredVehicles = List.from(_availableVehicles);
+    } else {
+      _filteredVehicles = _availableVehicles.where((vehicle) {
+        final name = vehicle['name']?.toString().toLowerCase() ?? '';
+        final numberPlate = vehicle['number_plate']?.toString().toLowerCase() ?? '';
+        final query = _searchQuery.toLowerCase();
+        return name.contains(query) || numberPlate.contains(query);
+      }).toList();
+    }
+    setState(() {});
   }
 
   Future<void> _loadWalletBalance() async {
@@ -157,6 +169,137 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     }
   }
 
+  void _showImagePickerOptions(bool isLicense) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Choose Option',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildPickerOption(
+              icon: Icons.camera_alt_outlined,
+              title: 'Take Photo',
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera, isLicense);
+              },
+            ),
+            _buildPickerOption(
+              icon: Icons.photo_library_outlined,
+              title: 'Choose from Gallery',
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery, isLicense);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showVideoPickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Choose Option',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildPickerOption(
+              icon: Icons.videocam_outlined,
+              title: 'Record Video',
+              onTap: () {
+                Navigator.pop(context);
+                _pickVideo(ImageSource.camera);
+              },
+            ),
+            _buildPickerOption(
+              icon: Icons.video_library_outlined,
+              title: 'Choose from Gallery',
+              onTap: () {
+                Navigator.pop(context);
+                _pickVideo(ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPickerOption({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: Colors.grey.shade700),
+            const SizedBox(width: 16),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 16, color: Colors.black87),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickSignImage(ImageSource source) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
@@ -167,6 +310,60 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     }
   }
 
+  void _showSignImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Choose Option',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildPickerOption(
+              icon: Icons.camera_alt_outlined,
+              title: 'Take Photo',
+              onTap: () {
+                Navigator.pop(context);
+                _pickSignImage(ImageSource.camera);
+              },
+            ),
+            _buildPickerOption(
+              icon: Icons.photo_library_outlined,
+              title: 'Choose from Gallery',
+              onTap: () {
+                Navigator.pop(context);
+                _pickSignImage(ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickCustomerImage(ImageSource source) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
@@ -175,6 +372,60 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         _customerWithVehicleImage = File(pickedFile.path);
       });
     }
+  }
+
+  void _showCustomerImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Choose Option',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildPickerOption(
+              icon: Icons.camera_alt_outlined,
+              title: 'Take Photo',
+              onTap: () {
+                Navigator.pop(context);
+                _pickCustomerImage(ImageSource.camera);
+              },
+            ),
+            _buildPickerOption(
+              icon: Icons.photo_library_outlined,
+              title: 'Choose from Gallery',
+              onTap: () {
+                Navigator.pop(context);
+                _pickCustomerImage(ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _pickVideo(ImageSource source) async {
@@ -270,7 +521,6 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         _currentPhase = 2;
       });
       
-      // Update wallet balance in provider
       await authProvider.fetchWalletBalance();
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -458,134 +708,6 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     }
   }
 
-  Widget _buildPhaseIndicator() {
-    final phases = [
-      {'title': 'Select Vehicle', 'icon': Icons.directions_car_outlined},
-      {'title': 'Verify Customer', 'icon': Icons.verified_user_outlined},
-      {'title': 'Upload Docs', 'icon': Icons.upload_file_outlined},
-      {'title': 'Sign & Go', 'icon': Icons.edit_note_outlined},
-    ];
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      color: Colors.white,
-      child: Row(
-        children: List.generate(phases.length, (index) {
-          final isActive = _currentPhase >= index;
-          final isCompleted = _currentPhase > index;
-          return Expanded(
-            child: Column(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isActive ? Colors.black : Colors.grey.shade200,
-                    border: Border.all(
-                      color: isActive ? Colors.black : Colors.grey.shade300,
-                      width: 2,
-                    ),
-                  ),
-                  child: Center(
-                    child: isCompleted
-                        ? const Icon(Icons.check, size: 22, color: Colors.white)
-                        : Icon(
-                            phases[index]['icon'] as IconData,
-                            size: 22,
-                            color: isActive ? Colors.white : Colors.grey.shade500,
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  phases[index]['title'] as String,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isActive ? Colors.black : Colors.grey.shade500,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                if (index < phases.length - 1)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 2,
-                      color: isCompleted ? Colors.black : Colors.grey.shade300,
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    Color? iconColor,
-    VoidCallback? onTap,
-  }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (iconColor ?? Colors.black).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: iconColor ?? Colors.black, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (onTap != null)
-                Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey.shade400),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoadingVehicles || _isLoadingWallet) {
@@ -593,32 +715,15 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         backgroundColor: Colors.white,
         appBar: _buildAppBar(),
         body: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.black),
-              SizedBox(height: 16),
-              Text('Loading...', style: TextStyle(color: Colors.grey)),
-            ],
-          ),
+          child: CircularProgressIndicator(color: Colors.grey),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Colors.white,
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          _buildPhaseIndicator(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: _currentPhase == 0 ? _buildPOSScreen() : _buildPhaseScreen(),
-            ),
-          ),
-        ],
-      ),
+      body: _currentPhase == 0 ? _buildPOSScreen() : _buildPhaseScreen(),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
@@ -626,7 +731,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         unselectedItemColor: Colors.grey.shade500,
         selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
         unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
-        elevation: 8,
+        elevation: 0,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
           BottomNavigationBarItem(icon: Icon(Icons.directions_car_outlined), label: 'Vehicles'),
@@ -643,13 +748,13 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     return AppBar(
       title: const Text(
         'New Rental',
-        style: TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22, letterSpacing: -0.5),
       ),
       backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
+      foregroundColor: Colors.grey.shade900,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: Icon(Icons.arrow_back, color: Colors.grey.shade900),
         onPressed: () => Navigator.pop(context),
       ),
       actions: [
@@ -658,23 +763,19 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
             context,
             MaterialPageRoute(builder: (context) => const WalletScreen()),
           ),
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(20),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.only(right: 12),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.account_balance_wallet_outlined, size: 18, color: Colors.grey.shade700),
-                const SizedBox(width: 6),
-                Text(
-                  '₹${_formatWalletAmount(_walletBalance)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    '₹${_formatWalletAmount(_walletBalance)}',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               ],
@@ -691,19 +792,13 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
                 child: Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                 ),
               ),
             ],
           ),
           onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Notifications coming soon'),
-              backgroundColor: Colors.grey,
-            ),
+            const SnackBar(content: Text('Notifications coming soon'), backgroundColor: Colors.grey),
           ),
         ),
       ],
@@ -712,176 +807,138 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
 
   Widget _buildPOSScreen() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
+        // Search Bar
+        Padding(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Select a vehicle from the list below to start the rental process',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.blue.shade700,
-                    height: 1.4,
-                  ),
-                ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: TextField(
+              onChanged: (value) {
+                _searchQuery = value;
+                _filterVehicles();
+              },
+              decoration: InputDecoration(
+                hintText: 'Search by name or number plate...',
+                hintStyle: TextStyle(color: Colors.grey.shade400),
+                prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: Colors.grey.shade500),
+                        onPressed: () {
+                          _searchQuery = '';
+                          _filterVehicles();
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.all(16),
               ),
-            ],
+            ),
           ),
         ),
-        const SizedBox(height: 20),
-        Text(
-          'Available Vehicles',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade900,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '${_availableVehicles.length} vehicles available for rent',
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+        Expanded(
+          child: _filteredVehicles.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.directions_car_outlined, size: 64, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text('No vehicles found', style: TextStyle(color: Colors.grey.shade500)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _filteredVehicles.length,
+                  itemBuilder: (context, index) {
+                    final vehicle = _filteredVehicles[index];
+                    final isAvailable = vehicle['status']?.toString().toLowerCase() == 'available';
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: _selectedVehicle?['id'] == vehicle['id'] ? Colors.grey.shade100 : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _selectedVehicle?['id'] == vehicle['id'] ? Colors.black : Colors.grey.shade200,
+                          width: _selectedVehicle?['id'] == vehicle['id'] ? 2 : 1,
+                        ),
+                      ),
+                      child: ListTile(
+                        onTap: isAvailable ? () => setState(() => _selectedVehicle = vehicle) : null,
+                        leading: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            vehicle['type'] == 'car' || vehicle['type'] == 'SUV' ? Icons.directions_car : Icons.motorcycle,
+                            size: 30,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        title: Text(
+                          vehicle['name'] ?? 'Unknown',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isAvailable ? Colors.grey.shade900 : Colors.grey.shade500,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '₹${vehicle['daily_rate'] ?? 0}/day • ${vehicle['number_plate'] ?? ''}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                        trailing: isAvailable
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'Available',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green),
+                                ),
+                              )
+                            : Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'Unavailable',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.red),
+                                ),
+                              ),
+                      ),
+                    );
+                  },
+                ),
         ),
         const SizedBox(height: 16),
-        _availableVehicles.isEmpty
-            ? Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.directions_car_outlined, size: 64, color: Colors.grey.shade400),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No vehicles available',
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _availableVehicles.length,
-                itemBuilder: (context, index) {
-                  final vehicle = _availableVehicles[index];
-                  final isAvailable = vehicle['status']?.toString().toLowerCase() == 'available';
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: _selectedVehicle?['id'] == vehicle['id'] 
-                          ? Colors.black.withOpacity(0.02) 
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _selectedVehicle?['id'] == vehicle['id'] 
-                            ? Colors.black 
-                            : Colors.grey.shade200,
-                        width: _selectedVehicle?['id'] == vehicle['id'] ? 2 : 1,
-                      ),
-                    ),
-                    child: ListTile(
-                      onTap: isAvailable ? () => setState(() => _selectedVehicle = vehicle) : null,
-                      leading: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          vehicle['type'] == 'car' || vehicle['type'] == 'SUV' 
-                              ? Icons.directions_car 
-                              : Icons.motorcycle,
-                          size: 32,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      title: Text(
-                        vehicle['name'] ?? 'Unknown',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: isAvailable ? Colors.black87 : Colors.grey.shade500,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '₹${vehicle['daily_rate'] ?? 0}/day',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green.shade700,
-                            ),
-                          ),
-                          Text(
-                            vehicle['number_plate'] ?? '',
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                          ),
-                        ],
-                      ),
-                      trailing: isAvailable
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                'Available',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green.shade700,
-                                ),
-                              ),
-                            )
-                          : Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                'Unavailable',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.red.shade700,
-                                ),
-                              ),
-                            ),
-                    ),
-                  );
-                },
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _selectedVehicle != null ? () => setState(() => _currentPhase = 1) : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                disabledBackgroundColor: Colors.grey.shade300,
               ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: _selectedVehicle != null 
-                ? () => setState(() => _currentPhase = 1) 
-                : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              disabledBackgroundColor: Colors.grey.shade300,
-            ),
-            child: const Text(
-              'Continue with Selected Vehicle',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              child: const Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ),
         ),
@@ -899,443 +956,427 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
   }
 
   Widget _buildPhase1Screen() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildInfoCard(
-          icon: Icons.directions_car,
-          title: _selectedVehicle?['name'] ?? 'Unknown',
-          subtitle: '₹${_selectedVehicle?['daily_rate'] ?? 0}/day • ${_selectedVehicle?['number_plate'] ?? ''}',
-          iconColor: Colors.green,
-        ),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.orange.shade50,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'A verification fee of ₹50 will be deducted from your wallet. This fee is non-refundable.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.orange.shade700,
-                    height: 1.4,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Selected Vehicle Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    _selectedVehicle?['type'] == 'car' || _selectedVehicle?['type'] == 'SUV'
+                        ? Icons.directions_car
+                        : Icons.motorcycle,
+                    size: 32,
+                    color: Colors.grey.shade700,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Customer Details',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade900,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Form(
-          key: _customerFormKey,
-          child: Column(
-            children: [
-              _buildTextField(
-                controller: _customerPhoneController,
-                label: 'Phone Number',
-                hint: 'Enter 10-digit mobile number',
-                icon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Phone number is required';
-                  if (v.length < 10) return 'Enter a valid 10-digit phone number';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _dlNumberController,
-                label: 'Driving License Number',
-                hint: 'Enter DL number (e.g., DL-0420110012345)',
-                icon: Icons.credit_card_outlined,
-                validator: (v) => v == null || v.isEmpty ? 'License number is required' : null,
-              ),
-              const SizedBox(height: 16),
-              _buildDateField(
-                controller: _dobController,
-                label: 'Date of Birth',
-                hint: 'Select date of birth',
-                icon: Icons.calendar_today_outlined,
-                onTap: _selectDate,
-                validator: (v) => v == null || v.isEmpty ? 'Date of birth is required' : null,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: _isVerifying ? null : _phase1VerifyCustomer,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              disabledBackgroundColor: Colors.grey.shade300,
-            ),
-            child: _isVerifying
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text(
-                    'Verify & Continue',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedVehicle?['name'] ?? 'Unknown',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade900),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '₹${_selectedVehicle?['daily_rate'] ?? 0}/day • ${_selectedVehicle?['number_plate'] ?? ''}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    ],
                   ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 24),
+
+          // Info Card
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 18, color: Colors.grey.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'A verification fee of ₹3 will be deducted from your wallet. This fee is non-refundable.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Form Title
+          Text(
+            'Customer Details',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade900),
+          ),
+          const SizedBox(height: 16),
+
+          // Form
+          Form(
+            key: _customerFormKey,
+            child: Column(
+              children: [
+                _buildTextField(
+                  controller: _customerPhoneController,
+                  label: 'Phone Number',
+                  hint: 'Enter 10-digit mobile number',
+                  icon: Icons.phone_outlined,
+                  keyboardType: TextInputType.phone,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Phone number is required';
+                    if (v.length < 10) return 'Enter a valid 10-digit phone number';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _dlNumberController,
+                  label: 'Driving License Number',
+                  hint: 'Enter DL number',
+                  icon: Icons.credit_card_outlined,
+                  validator: (v) => v == null || v.isEmpty ? 'License number is required' : null,
+                ),
+                const SizedBox(height: 16),
+                _buildDateField(
+                  controller: _dobController,
+                  label: 'Date of Birth',
+                  hint: 'Select date of birth',
+                  icon: Icons.calendar_today_outlined,
+                  onTap: _selectDate,
+                  validator: (v) => v == null || v.isEmpty ? 'Date of birth is required' : null,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Verify Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _isVerifying ? null : _phase1VerifyCustomer,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                disabledBackgroundColor: Colors.grey.shade300,
+              ),
+              child: _isVerifying
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Verify & Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildPhase2Screen() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.shade100,
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      shape: BoxShape.circle,
-                      image: _verifiedCustomer?['customer_photo_url'] != null
-                          ? DecorationImage(
-                              image: NetworkImage(_verifiedCustomer!['customer_photo_url']),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: _verifiedCustomer?['customer_photo_url'] == null
-                        ? Icon(Icons.person, size: 40, color: Colors.grey.shade400)
-                        : null,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _verifiedCustomer?['name'] ?? 'Customer Name',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _verifiedCustomer?['phone'] ?? 'Phone number',
-                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.verified, size: 14, color: Colors.green.shade700),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Verified',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(height: 32),
-              _buildDetailRow('License Number', _verifiedCustomer?['license_number'] ?? 'N/A'),
-              const SizedBox(height: 12),
-              _buildDetailRow('Date of Birth', _formatDate(_verifiedCustomer?['dob'])),
-              const SizedBox(height: 12),
-              _buildDetailRow('License Issue Date', _formatDate(_verifiedCustomer?['license_issue_date'])),
-              const SizedBox(height: 12),
-              _buildDetailRow('Valid Till', _formatDate(_verifiedCustomer?['license_validity']?['valid_to'])),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Customer Info Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              children: [
+                Row(
                   children: [
-                    Icon(Icons.location_on_outlined, size: 18, color: Colors.grey.shade600),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _verifiedCustomer?['address'] ?? 'Address not available',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        shape: BoxShape.circle,
+                      ),
+                      child: ClipOval(
+                        child: _verifiedCustomer?['customer_photo_url'] != null
+                            ? Image.network(
+                                _verifiedCustomer!['customer_photo_url'],
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Icon(Icons.person, size: 35, color: Colors.grey.shade500),
+                              )
+                            : Icon(Icons.person, size: 35, color: Colors.grey.shade500),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.amber.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.currency_rupee, size: 18, color: Colors.amber.shade800),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Verification Fee: ₹$_verificationFee',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.amber.shade800,
-                            ),
+                            _verifiedCustomer?['name'] ?? 'Customer Name',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade900),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Wallet Balance after fee: ₹${_formatWalletAmount(_walletBalanceAfterFee)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.amber.shade700,
-                            ),
+                            _verifiedCustomer?['phone'] ?? 'Phone number',
+                            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                           ),
                         ],
                       ),
                     ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Verified',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Document Upload',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade900,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Please upload the following documents to proceed',
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-        ),
-        const SizedBox(height: 20),
-        _buildImagePicker(
-          label: 'Driving License',
-          imageFile: _licenseImage,
-          onTap: () => _pickImage(ImageSource.gallery, true),
-          required: true,
-        ),
-        const SizedBox(height: 16),
-        _buildImagePicker(
-          label: 'Aadhaar Card',
-          imageFile: _aadhaarImage,
-          onTap: () => _pickImage(ImageSource.gallery, false),
-          required: false,
-          optional: true,
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: _isUploadingDocs ? null : _phase2UploadDocuments,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              disabledBackgroundColor: Colors.grey.shade300,
-            ),
-            child: _isUploadingDocs
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text(
-                    'Upload Documents & Continue',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                const Divider(height: 24),
+                _buildDetailRow('License Number', _verifiedCustomer?['license_number'] ?? 'N/A'),
+                const SizedBox(height: 12),
+                _buildDetailRow('Date of Birth', _formatDate(_verifiedCustomer?['dob'])),
+                const SizedBox(height: 12),
+                _buildDetailRow('License Issue Date', _formatDate(_verifiedCustomer?['license_issue_date'])),
+                const SizedBox(height: 12),
+                _buildDetailRow('Valid Till', _formatDate(_verifiedCustomer?['license_validity']?['valid_to'])),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _verifiedCustomer?['address'] ?? 'Address not available',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.currency_rupee, size: 16, color: Colors.amber.shade800),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Verification Fee: ₹$_verificationFee',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber.shade800),
+                            ),
+                            Text(
+                              'Wallet Balance: ₹${_formatWalletAmount(_walletBalanceAfterFee)}',
+                              style: TextStyle(fontSize: 11, color: Colors.amber.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 24),
+
+          // Document Upload Title
+          Text(
+            'Upload Documents',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade900),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Please upload the following documents to proceed',
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 16),
+
+          // License Image
+          _buildImagePickerWithOptions(
+            label: 'Driving License',
+            imageFile: _licenseImage,
+            onTap: () => _showImagePickerOptions(true),
+            required: true,
+          ),
+          const SizedBox(height: 16),
+
+          // Aadhaar Image
+          _buildImagePickerWithOptions(
+            label: 'Aadhaar Card',
+            imageFile: _aadhaarImage,
+            onTap: () => _showImagePickerOptions(false),
+            required: false,
+            optional: true,
+          ),
+          const SizedBox(height: 24),
+
+          // Upload Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _isUploadingDocs ? null : _phase2UploadDocuments,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                disabledBackgroundColor: Colors.grey.shade300,
+              ),
+              child: _isUploadingDocs
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Upload & Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildPhase3Screen() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Follow these steps to complete the rental process:\n'
-                  '1. Download and review the rental agreement\n'
-                  '2. Sign the agreement and take a photo\n'
-                  '3. Take a photo of customer with the vehicle\n'
-                  '4. Record a video of vehicle condition (optional)\n'
-                  '5. Click "Start Rental" to begin',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.blue.shade700,
-                    height: 1.5,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Info Card
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 18, color: Colors.grey.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Follow these steps:\n1. Download and review the rental agreement\n2. Sign the agreement and upload photo\n3. Take customer photo\n4. Record vehicle condition video (optional)',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.4),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        if (_agreementPath != null)
-          ElevatedButton.icon(
-            onPressed: _isDownloadingAgreement ? null : _downloadAndOpenAgreement,
-            icon: _isDownloadingAgreement
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.picture_as_pdf, color: Colors.white),
-            label: Text(_isDownloadingAgreement ? 'Loading...' : 'Download Rental Agreement'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              minimumSize: const Size(double.infinity, 50),
+              ],
             ),
           ),
-        const SizedBox(height: 24),
-        Text(
-          'Signed Documents & Photos',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade900,
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildImagePicker(
-          label: 'Signed Agreement',
-          imageFile: _signedAgreementImage,
-          onTap: () => _pickSignImage(ImageSource.gallery),
-          required: true,
-          hint: 'Upload photo of signed agreement',
-        ),
-        const SizedBox(height: 16),
-        _buildImagePicker(
-          label: 'Customer with Vehicle',
-          imageFile: _customerWithVehicleImage,
-          onTap: () => _pickCustomerImage(ImageSource.gallery),
-          required: false,
-          optional: true,
-          hint: 'Take photo of customer standing with the vehicle',
-        ),
-        const SizedBox(height: 16),
-        _buildVideoPicker(
-          label: 'Vehicle Condition Video',
-          videoFile: _vehicleConditionVideo,
-          onTap: () => _pickVideo(ImageSource.gallery),
-          hint: 'Record a short video showing vehicle condition',
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: _isCompletingRental ? null : _phase3CompleteRental,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          const SizedBox(height: 24),
+
+          // Download Agreement Button
+          if (_agreementPath != null)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isDownloadingAgreement ? null : _downloadAndOpenAgreement,
+                icon: _isDownloadingAgreement
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.picture_as_pdf),
+                label: Text(_isDownloadingAgreement ? 'Loading...' : 'Download Rental Agreement'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
-              disabledBackgroundColor: Colors.grey.shade300,
             ),
-            child: _isCompletingRental
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text(
-                    'Start Rental',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+          const SizedBox(height: 24),
+
+          // Signed Agreement
+          _buildImagePickerWithOptions(
+            label: 'Signed Agreement',
+            imageFile: _signedAgreementImage,
+            onTap: () => _showSignImagePickerOptions(),
+            required: true,
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+
+          // Customer with Vehicle
+          _buildImagePickerWithOptions(
+            label: 'Customer with Vehicle',
+            imageFile: _customerWithVehicleImage,
+            onTap: () => _showCustomerImagePickerOptions(),
+            required: false,
+            optional: true,
+          ),
+          const SizedBox(height: 16),
+
+          // Vehicle Condition Video
+          _buildVideoPickerWithOptions(
+            label: 'Vehicle Condition Video',
+            videoFile: _vehicleConditionVideo,
+            onTap: () => _showVideoPickerOptions(),
+          ),
+          const SizedBox(height: 24),
+
+          // Start Rental Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _isCompletingRental ? null : _phase3CompleteRental,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                disabledBackgroundColor: Colors.grey.shade300,
+              ),
+              child: _isCompletingRental
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Start Rental', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1345,16 +1386,10 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
       children: [
         SizedBox(
           width: 110,
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-          ),
+          child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
         ),
         Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
-          ),
+          child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87)),
         ),
       ],
     );
@@ -1371,10 +1406,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-        ),
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -1387,8 +1419,8 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
             keyboardType: keyboardType,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-              prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 20),
+              hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+              prefixIcon: Icon(icon, color: Colors.grey, size: 20),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),
@@ -1410,10 +1442,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-        ),
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87)),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: onTap,
@@ -1428,9 +1457,9 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
               enabled: false,
               decoration: InputDecoration(
                 hintText: hint,
-                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                prefixIcon: Icon(icon, color: Colors.grey.shade600, size: 20),
-                suffixIcon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                prefixIcon: Icon(icon, color: Colors.grey, size: 20),
+                suffixIcon: const Icon(Icons.arrow_drop_down, color: Colors.grey),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
@@ -1442,27 +1471,20 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     );
   }
 
-  Widget _buildImagePicker({
+  Widget _buildImagePickerWithOptions({
     required String label,
     required File? imageFile,
     required VoidCallback onTap,
     bool required = false,
     bool optional = false,
-    String? hint,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-            ),
-            if (required) ...[
-              const SizedBox(width: 4),
-              const Text('*', style: TextStyle(color: Colors.red, fontSize: 16)),
-            ],
+            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87)),
+            if (required) const Text(' *', style: TextStyle(color: Colors.red)),
             if (optional) ...[
               const SizedBox(width: 8),
               Container(
@@ -1471,10 +1493,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
                   color: Colors.grey.shade200,
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(
-                  'Optional',
-                  style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-                ),
+                child: Text('Optional', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
               ),
             ],
           ],
@@ -1483,7 +1502,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         GestureDetector(
           onTap: onTap,
           child: Container(
-            height: 120,
+            height: 100,
             width: double.infinity,
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
@@ -1515,12 +1534,9 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.cloud_upload_outlined, size: 40, color: Colors.grey.shade500),
+                      Icon(Icons.cloud_upload_outlined, size: 32, color: Colors.grey.shade500),
                       const SizedBox(height: 8),
-                      Text(
-                        hint ?? 'Tap to upload image',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                      ),
+                      Text('Tap to upload', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                     ],
                   ),
           ),
@@ -1529,21 +1545,17 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     );
   }
 
-  Widget _buildVideoPicker({
+  Widget _buildVideoPickerWithOptions({
     required String label,
     required File? videoFile,
     required VoidCallback onTap,
-    String? hint,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-            ),
+            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87)),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1551,10 +1563,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
                 color: Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(
-                'Optional',
-                style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-              ),
+              child: Text('Optional', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
             ),
           ],
         ),
@@ -1562,7 +1571,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         GestureDetector(
           onTap: onTap,
           child: Container(
-            height: 120,
+            height: 100,
             width: double.infinity,
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
@@ -1574,24 +1583,18 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.play_circle_filled, size: 48, color: Colors.green.shade700),
+                        Icon(Icons.play_circle_filled, size: 32, color: Colors.green),
                         const SizedBox(height: 8),
-                        Text(
-                          'Video selected',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.green.shade700),
-                        ),
+                        Text('Video selected', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                       ],
                     ),
                   )
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.videocam_outlined, size: 40, color: Colors.grey.shade500),
+                      Icon(Icons.videocam_outlined, size: 32, color: Colors.grey.shade500),
                       const SizedBox(height: 8),
-                      Text(
-                        hint ?? 'Tap to upload video',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                      ),
+                      Text('Tap to upload video', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                     ],
                   ),
           ),

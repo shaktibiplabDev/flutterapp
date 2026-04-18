@@ -8,6 +8,7 @@ import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'add_vehicle_screen.dart';
 import 'new_rental_screen.dart';
+import 'reports_screen.dart'; // Add this import
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -716,7 +717,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   subtitle: 'View analytics',
                   color: Colors.purple,
                   onTap: () {
-                    _showComingSoon();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ReportsScreen(),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -1263,16 +1269,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
-  void _showComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('This feature is coming soon!'),
-        backgroundColor: Colors.grey,
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
 
   void _showNotificationComingSoon() {
     ScaffoldMessenger.of(context).showSnackBar(

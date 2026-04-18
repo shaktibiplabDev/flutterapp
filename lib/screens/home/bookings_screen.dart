@@ -12,6 +12,7 @@ import 'home_screen.dart';
 import 'vehicles_screen.dart';
 import 'profile_screen.dart';
 import 'wallet_screen.dart';
+import 'rental_detail_screen.dart'; // Add this import
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({super.key});
@@ -1168,6 +1169,15 @@ class _BookingsScreenState extends State<BookingsScreen> {
     return 'N/A';
   }
 
+  void _navigateToRentalDetail(Map<String, dynamic> booking) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RentalDetailScreen(rental: booking),
+      ),
+    ).then((_) => _loadBookings());
+  }
+
   void _onNavBarTap(int index) {
     if (index == _selectedIndex) return;
 
@@ -1541,496 +1551,499 @@ class _BookingsScreenState extends State<BookingsScreen> {
                         final isCompleted = normalizedStatus == 'completed';
                         final isPending = normalizedStatus == 'pending';
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: 50,
-                                          height: 50,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade100,
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                          child: _bookingCustomerImage(booking) !=
-                                                  null
-                                              ? ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  child: Image.network(
-                                                    _bookingCustomerImage(booking)!,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder:
-                                                        (_, __, ___) => Icon(
-                                                      Icons.person_outline,
-                                                      size: 28,
-                                                      color: Colors.grey.shade600,
-                                                    ),
-                                                  ),
-                                                )
-                                              : Icon(
-                                                  Icons.person_outline,
-                                                  size: 28,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                _customerName(booking),
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.grey.shade900,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                _vehicleName(booking),
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                statusColor.withValues(alpha: 0.1),
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            _getStatusText(booking['status']),
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              color: statusColor,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.calendar_today_outlined,
-                                                size: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'Start: ${_bookingStartDate(booking)}',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey.shade500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.calendar_today_outlined,
-                                                size: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'End: ${_bookingEndDate(booking)}',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey.shade500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.access_time,
-                                                size: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                _durationText(
-                                                  booking,
-                                                  isActive: isActive,
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey.shade500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.currency_rupee,
-                                                size: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                isActive
-                                                    ? _activeEstimatedAmount(
-                                                        booking,
-                                                      )
-                                                    : _bookingTotalAmountText(
-                                                        booking,
-                                                      ),
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.grey.shade900,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.phone_outlined,
-                                                size: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  _customerPhone(booking),
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey.shade500,
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.badge_outlined,
-                                                size: 14,
-                                                color: Colors.grey.shade500,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  _vehicleNumberPlate(booking),
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey.shade500,
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (isActive) ...[
-                                      const SizedBox(height: 10),
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: Colors.green.withValues(
-                                              alpha: 0.25,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.timelapse,
-                                              size: 15,
-                                              color: Colors.green.shade700,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              'Live: ${_formatElapsed(_activeElapsed(booking))}',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.green.shade700,
-                                              ),
-                                            ),
-                                            const Spacer(),
-                                            Text(
-                                              'Est. ${_activeEstimatedAmount(booking)}',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: Colors.green.shade800,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                    if (isPending) ...[
-                                      const SizedBox(height: 10),
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.orange.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: Colors.orange.withValues(
-                                              alpha: 0.25,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.hourglass_empty,
-                                              size: 15,
-                                              color: Colors.orange.shade700,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              'Awaiting confirmation',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.orange.shade700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              // Action Buttons for Active Rentals
-                              if (isActive)
+                        return GestureDetector(
+                          onTap: () => _navigateToRentalDetail(booking),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Column(
+                              children: [
                                 Padding(
                                   padding: const EdgeInsets.all(12),
                                   child: Column(
                                     children: [
                                       Row(
                                         children: [
+                                          Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: _bookingCustomerImage(booking) !=
+                                                    null
+                                                ? ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(10),
+                                                    child: Image.network(
+                                                      _bookingCustomerImage(booking)!,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder:
+                                                          (_, __, ___) => Icon(
+                                                        Icons.person_outline,
+                                                        size: 28,
+                                                        color: Colors.grey.shade600,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    Icons.person_outline,
+                                                    size: 28,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                          ),
+                                          const SizedBox(width: 12),
                                           Expanded(
-                                            child: OutlinedButton.icon(
-                                              onPressed: () {
-                                                _downloadAgreementFromBooking(
-                                                  booking,
-                                                );
-                                              },
-                                              style: OutlinedButton.styleFrom(
-                                                side: BorderSide(
-                                                  color: Colors.grey.shade300,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  _customerName(booking),
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.grey.shade900,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  _vehicleName(booking),
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
-                                              ),
-                                              icon: const Icon(
-                                                Icons.description_outlined,
-                                                size: 16,
-                                              ),
-                                              label: const Text('Agreement'),
+                                              ],
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  statusColor.withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              _getStatusText(booking['status']),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: statusColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
                                           Expanded(
-                                            child: OutlinedButton.icon(
-                                              onPressed: () {
-                                                _showCancelDialog(booking);
-                                              },
-                                              style: OutlinedButton.styleFrom(
-                                                side: BorderSide(
-                                                  color: Colors.red.shade400,
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.calendar_today_outlined,
+                                                  size: 14,
+                                                  color: Colors.grey.shade500,
                                                 ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Start: ${_bookingStartDate(booking)}',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey.shade500,
+                                                  ),
                                                 ),
-                                                foregroundColor:
-                                                    Colors.red.shade400,
-                                              ),
-                                              icon: const Icon(
-                                                Icons.close_rounded,
-                                                size: 16,
-                                              ),
-                                              label: const Text('Cancel'),
+                                              ],
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.calendar_today_outlined,
+                                                  size: 14,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'End: ${_bookingEndDate(booking)}',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: ElevatedButton.icon(
-                                          onPressed: () {
-                                            _showReturnDialog(booking);
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.black,
-                                            foregroundColor: Colors.white,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.access_time,
+                                                  size: 14,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  _durationText(
+                                                    booking,
+                                                    isActive: isActive,
+                                                  ),
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          icon: const Icon(
-                                            Icons.assignment_turned_in_outlined,
-                                            size: 16,
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.currency_rupee,
+                                                  size: 14,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  isActive
+                                                      ? _activeEstimatedAmount(
+                                                          booking,
+                                                        )
+                                                      : _bookingTotalAmountText(
+                                                          booking,
+                                                        ),
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.grey.shade900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          label: const Text('Return Vehicle'),
-                                        ),
+                                        ],
                                       ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.phone_outlined,
+                                                  size: 14,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    _customerPhone(booking),
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey.shade500,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.badge_outlined,
+                                                  size: 14,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    _vehicleNumberPlate(booking),
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey.shade500,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (isActive) ...[
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withValues(
+                                              alpha: 0.08,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: Colors.green.withValues(
+                                                alpha: 0.25,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.timelapse,
+                                                size: 15,
+                                                color: Colors.green.shade700,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Live: ${_formatElapsed(_activeElapsed(booking))}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.green.shade700,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              Text(
+                                                'Est. ${_activeEstimatedAmount(booking)}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.green.shade800,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      if (isPending) ...[
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.withValues(
+                                              alpha: 0.08,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: Colors.orange.withValues(
+                                                alpha: 0.25,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.hourglass_empty,
+                                                size: 15,
+                                                color: Colors.orange.shade700,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Awaiting confirmation',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.orange.shade700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
-                              // Action Buttons for Completed Rentals
-                              if (isCompleted)
-                                Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: OutlinedButton.icon(
-                                          onPressed: () {
-                                            _downloadAgreementFromBooking(booking);
-                                          },
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(
-                                                color: Colors.grey.shade300),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                // Action Buttons for Active Rentals
+                                if (isActive)
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: OutlinedButton.icon(
+                                                onPressed: () {
+                                                  _downloadAgreementFromBooking(
+                                                    booking,
+                                                  );
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  side: BorderSide(
+                                                    color: Colors.grey.shade300,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(8),
+                                                  ),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.description_outlined,
+                                                  size: 16,
+                                                ),
+                                                label: const Text('Agreement'),
+                                              ),
                                             ),
-                                          ),
-                                          icon: const Icon(Icons.description_outlined, size: 16),
-                                          label: const Text('Agreement'),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: OutlinedButton.icon(
-                                          onPressed: () {
-                                            _downloadReceiptFromBooking(booking);
-                                          },
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(
-                                                color: Colors.grey.shade300),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: OutlinedButton.icon(
+                                                onPressed: () {
+                                                  _showCancelDialog(booking);
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  side: BorderSide(
+                                                    color: Colors.red.shade400,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(8),
+                                                  ),
+                                                  foregroundColor:
+                                                      Colors.red.shade400,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.close_rounded,
+                                                  size: 16,
+                                                ),
+                                                label: const Text('Cancel'),
+                                              ),
                                             ),
-                                          ),
-                                          icon: const Icon(Icons.receipt_long_outlined, size: 16),
-                                          label: const Text('Receipt'),
+                                          ],
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 8),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              _showReturnDialog(booking);
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.black,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            icon: const Icon(
+                                              Icons.assignment_turned_in_outlined,
+                                              size: 16,
+                                            ),
+                                            label: const Text('Return Vehicle'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              // Action Buttons for Pending Rentals
-                              if (isPending)
-                                Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: OutlinedButton.icon(
-                                          onPressed: () {
-                                            _showCancelDialog(booking);
-                                          },
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(
-                                                color: Colors.red.shade400),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                // Action Buttons for Completed Rentals
+                                if (isCompleted)
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () {
+                                              _downloadAgreementFromBooking(booking);
+                                            },
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(
+                                                  color: Colors.grey.shade300),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
                                             ),
-                                            foregroundColor: Colors.red.shade400,
+                                            icon: const Icon(Icons.description_outlined, size: 16),
+                                            label: const Text('Agreement'),
                                           ),
-                                          icon: const Icon(
-                                            Icons.close_rounded,
-                                            size: 16,
-                                          ),
-                                          label: const Text('Cancel'),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () {
+                                              _downloadReceiptFromBooking(booking);
+                                            },
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(
+                                                  color: Colors.grey.shade300),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                                            label: const Text('Receipt'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                            ],
+                                // Action Buttons for Pending Rentals
+                                if (isPending)
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () {
+                                              _showCancelDialog(booking);
+                                            },
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(
+                                                  color: Colors.red.shade400),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              foregroundColor: Colors.red.shade400,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                              size: 16,
+                                            ),
+                                            label: const Text('Cancel'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         );
                       },

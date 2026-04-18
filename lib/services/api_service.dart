@@ -1010,4 +1010,145 @@ class ApiService {
 
     return json.decode(response.body);
   }
+
+  // ==================== REPORTS MANAGEMENT ====================
+
+  // Get reports summary
+  Future<Map<String, dynamic>> getReportsSummary() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/reports/summary'),
+      headers: headers,
+    );
+    return json.decode(response.body);
+  }
+
+  // Get earnings report
+  Future<Map<String, dynamic>> getReportsEarnings({
+    String? startDate,
+    String? endDate,
+    String? month,
+    String? year,
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = <String, String>{};
+    if (startDate != null) queryParams['start_date'] = startDate;
+    if (endDate != null) queryParams['end_date'] = endDate;
+    if (month != null) queryParams['month'] = month;
+    if (year != null) queryParams['year'] = year;
+
+    final uri = Uri.parse('$baseUrl/reports/earnings')
+        .replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+    return json.decode(response.body);
+  }
+
+  // Get rentals report
+  Future<Map<String, dynamic>> getReportsRentals({
+    String? startDate,
+    String? endDate,
+    String? date,
+    String? status,
+    String? vehicleId,
+    String? customerId,
+    String? sortBy,
+    String? sortOrder,
+    int perPage = 15,
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = <String, String>{};
+    if (startDate != null) queryParams['start_date'] = startDate;
+    if (endDate != null) queryParams['end_date'] = endDate;
+    if (date != null) queryParams['date'] = date;
+    if (status != null) queryParams['status'] = status;
+    if (vehicleId != null) queryParams['vehicle_id'] = vehicleId;
+    if (customerId != null) queryParams['customer_id'] = customerId;
+    if (sortBy != null) queryParams['sort_by'] = sortBy;
+    if (sortOrder != null) queryParams['sort_order'] = sortOrder;
+    queryParams['per_page'] = perPage.toString();
+
+    final uri = Uri.parse('$baseUrl/reports/rentals')
+        .replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+    return json.decode(response.body);
+  }
+
+  // Get top vehicles report
+  Future<Map<String, dynamic>> getReportsTopVehicles({
+    int limit = 10,
+    String? period,
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = <String, String>{};
+    queryParams['limit'] = limit.toString();
+    if (period != null) queryParams['period'] = period;
+
+    final uri = Uri.parse('$baseUrl/reports/top-vehicles')
+        .replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+    return json.decode(response.body);
+  }
+
+  // Get top customers report
+  Future<Map<String, dynamic>> getReportsTopCustomers({
+    int limit = 10,
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = <String, String>{};
+    queryParams['limit'] = limit.toString();
+
+    final uri = Uri.parse('$baseUrl/reports/top-customers')
+        .replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+    return json.decode(response.body);
+  }
+
+  // Get documents report
+  Future<Map<String, dynamic>> getReportsDocuments() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/reports/documents'),
+      headers: headers,
+    );
+    return json.decode(response.body);
+  }
+
+  // Export rentals report
+  Future<Map<String, dynamic>> exportRentalsReport({
+    String? startDate,
+    String? endDate,
+    String? date,
+    String? status,
+    String? vehicleId,
+    String? customerId,
+    String? sortBy,
+    String? sortOrder,
+    String format = 'csv',
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = <String, String>{};
+    if (startDate != null) queryParams['start_date'] = startDate;
+    if (endDate != null) queryParams['end_date'] = endDate;
+    if (date != null) queryParams['date'] = date;
+    if (status != null) queryParams['status'] = status;
+    if (vehicleId != null) queryParams['vehicle_id'] = vehicleId;
+    if (customerId != null) queryParams['customer_id'] = customerId;
+    if (sortBy != null) queryParams['sort_by'] = sortBy;
+    if (sortOrder != null) queryParams['sort_order'] = sortOrder;
+    queryParams['format'] = format;
+
+    final uri = Uri.parse('$baseUrl/reports/export/rentals')
+        .replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+    
+    // For CSV export, the response is plain text
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'data': response.body,
+      };
+    }
+    
+    return json.decode(response.body);
+  }
 }
