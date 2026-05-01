@@ -10,7 +10,7 @@ import 'profile_screen.dart';
 import 'add_vehicle_screen.dart';
 import 'new_rental_screen.dart';
 import 'reports_screen.dart';
-import 'notifications_screen.dart'; // Add this import
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -50,16 +50,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final apiService = ApiService();
       final response = await apiService.getUnreadNotificationsCount();
       if (response['success'] == true && response['data'] != null) {
-        setState(() {
-          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
-        });
+        if (mounted) {
+          setState(() {
+            _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+          });
+        }
       }
     } catch (e) {
-      print('Error loading unread notification count: $e');
+      debugPrint('Error loading unread notification count: $e');
     }
   }
 
   Future<void> _loadDashboardData() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
     });
@@ -106,11 +110,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final statsResponse = results[3];
       _statistics = _asMap(statsResponse['data']) ?? <String, dynamic>{};
     } catch (e) {
-      print('Error loading dashboard: $e');
+      debugPrint('Error loading dashboard: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -177,18 +183,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _navigateToNotifications() async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const NotificationsScreen()),
     );
-    
-    // Refresh unread count when coming back from notifications screen
-    if (result == true) {
-      await _loadUnreadNotificationCount();
-    } else {
-      // Even if no explicit result, refresh the count
-      await _loadUnreadNotificationCount();
-    }
+    await _loadUnreadNotificationCount();
   }
 
   @override
@@ -248,15 +247,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ),
             
-            // Stats Grid Sliver
+            // Stats Grid Sliver - FIXED: Properly responsive with Wrap
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               sliver: SliverToBoxAdapter(
-                child: FadeInAnimation(
-                  delay: 0.2,
-                  controller: _animationController,
-                  child: _buildStatsGrid(),
-                ),
+                child: _buildStatsGrid(),
               ),
             ),
             
@@ -394,7 +389,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       child: Stack(
         children: [
-          // Decorative circles
           Positioned(
             right: -20,
             top: -20,
@@ -572,6 +566,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  // FIXED: Responsive Stats Grid using Wrap - No overflow on any screen size
   Widget _buildStatsGrid() {
     final statsItems = [
       {
@@ -604,86 +599,87 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       },
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.4,
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: statsItems.map((stat) => _buildStatCard(stat)).toList(),
+    );
+  }
+
+  // FIXED: Individual stat card that sizes itself properly
+  Widget _buildStatCard(Map<String, dynamic> stat) {
+    return Container(
+      width: (MediaQuery.of(context).size.width - 52) / 2, // 2 cards per row with padding
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      itemCount: 4,
-      itemBuilder: (context, index) {
-        final stat = statsItems[index];
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.shade200,
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: (stat['color'] as Color).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(stat['icon'] as IconData, size: 20, color: stat['color'] as Color),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: (stat['color'] as Color).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(stat['icon'] as IconData, size: 20, color: stat['color'] as Color),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    stat['value'].toString(),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    stat['title'].toString(),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      stat['trend'] as String,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.green.shade700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          const SizedBox(height: 12),
+          
+          // Value
+          Text(
+            stat['value'].toString(),
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        );
-      },
+          const SizedBox(height: 4),
+          
+          // Title
+          Text(
+            stat['title'].toString(),
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey.shade600,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 8),
+          
+          // Trend badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              stat['trend'] as String,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: Colors.green.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -693,18 +689,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade900,
-                ),
-              ),
-            ],
+          child: Text(
+            'Quick Actions',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade900,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1111,22 +1102,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade500),
-                                const SizedBox(width: 6),
-                                Text(
-                                  booking['start_date'] != null
-                                      ? _formatDate(booking['start_date'])
-                                      : booking['start_time'] != null
-                                          ? _formatDate(booking['start_time'])
-                                          : 'Date not set',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
+                            Flexible(
+                              child: Row(
+                                children: [
+                                  Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade500),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      _formatDate(booking['start_date'] ?? booking['start_time']),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1205,23 +1197,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ],
       currentIndex: 0,
       onTap: (index) {
-        if (index == 0) {
-          // Already on home
-        } else if (index == 1) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const VehiclesScreen()),
-          );
-        } else if (index == 2) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const BookingsScreen()),
-          );
-        } else if (index == 3) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ProfileScreen()),
-          );
+        switch (index) {
+          case 0:
+            break;
+          case 1:
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const VehiclesScreen()),
+            );
+            break;
+          case 2:
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const BookingsScreen()),
+            );
+            break;
+          case 3:
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfileScreen()),
+            );
+            break;
         }
       },
     );

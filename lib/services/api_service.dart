@@ -4,12 +4,77 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http_parser/http_parser.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+
+// ==================== PERSISTENT CACHE ====================
+class PersistentCache {
+  static final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  static Future<void> store(String key, Map<String, dynamic> data,
+      {Duration? ttl}) async {
+    final cacheEntry = {
+      'data': data,
+      'expires_at': DateTime.now()
+          .add(ttl ?? const Duration(minutes: 30))
+          .toIso8601String(),
+    };
+    await _storage.write(key: 'cache_$key', value: json.encode(cacheEntry));
+  }
+
+  static Future<Map<String, dynamic>?> retrieve(String key) async {
+    final cacheJson = await _storage.read(key: 'cache_$key');
+    if (cacheJson == null) return null;
+
+    final cacheEntry = json.decode(cacheJson);
+    final expiresAt = DateTime.parse(cacheEntry['expires_at']);
+
+    if (DateTime.now().isAfter(expiresAt)) {
+      await _storage.delete(key: 'cache_$key');
+      return null;
+    }
+
+    return cacheEntry['data'];
+  }
+
+  static Future<void> clear(String key) async {
+    await _storage.delete(key: 'cache_$key');
+  }
+
+  static Future<void> clearByPrefix(String prefix) async {
+    final allKeys = await _storage.readAll();
+    for (final key in allKeys.keys) {
+      if (key.startsWith('cache_$prefix')) {
+        await _storage.delete(key: key);
+      }
+    }
+  }
+}
 
 class ApiService {
   static const String baseUrl =
       'https://rentos.versaero.top/api'; // Update with your API URL
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  // Callback for unauthorized events (to be set by AuthProvider)
+  static Function? onUnauthorized;
+
+  // Helper to check if response is unauthorized
+  bool _isUnauthorized(http.Response response) {
+    return response.statusCode == 401;
+  }
+
+  // Helper to handle unauthorized response
+  Future<void> _handleUnauthorizedResponse() async {
+    await _storage.delete(key: 'user_token');
+    await _storage.delete(key: 'user_data');
+    await _storage.delete(key: 'token_expiry');
+
+    // Trigger global unauthorized callback if set
+    if (onUnauthorized != null) {
+      onUnauthorized!();
+    }
+  }
 
   // Headers
   Future<Map<String, String>> getHeaders() async {
@@ -77,9 +142,8 @@ class ApiService {
 
   String? _extractFileNameFromContentDisposition(String? headerValue) {
     if (headerValue == null || headerValue.isEmpty) return null;
-    final utf8Match =
-        RegExp(r"filename\*=UTF-8''([^;]+)", caseSensitive: false)
-            .firstMatch(headerValue);
+    final utf8Match = RegExp(r"filename\*=UTF-8''([^;]+)", caseSensitive: false)
+        .firstMatch(headerValue);
     if (utf8Match != null) {
       return Uri.decodeComponent(utf8Match.group(1)!);
     }
@@ -236,6 +300,14 @@ class ApiService {
       await _storage.write(key: 'user_token', value: data['data']['token']);
       await _storage.write(
           key: 'user_data', value: json.encode(data['data']['user']));
+
+      // Store token expiry if provided
+      final expiresIn = data['data']['token_expires_in'];
+      if (expiresIn != null) {
+        final expiryDate = DateTime.now().add(Duration(minutes: expiresIn));
+        await _storage.write(
+            key: 'token_expiry', value: expiryDate.toIso8601String());
+      }
     }
 
     return data;
@@ -248,6 +320,15 @@ class ApiService {
       Uri.parse('$baseUrl/auth/me'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -268,6 +349,15 @@ class ApiService {
         'new_password_confirmation': newPasswordConfirmation,
       }),
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -299,6 +389,7 @@ class ApiService {
 
     await _storage.delete(key: 'user_token');
     await _storage.delete(key: 'user_data');
+    await _storage.delete(key: 'token_expiry');
 
     return json.decode(response.body);
   }
@@ -516,6 +607,15 @@ class ApiService {
         Uri.parse('$baseUrl/vehicles').replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -548,6 +648,15 @@ class ApiService {
       }),
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -559,27 +668,48 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
   // Update vehicle
+// Update vehicle
   Future<Map<String, dynamic>> updateVehicle(
     String vehicleId, {
     String? name,
     int? hourlyRate,
     int? dailyRate,
+    int? weeklyRate, // ADD THIS
   }) async {
     final headers = await getHeaders();
     final body = <String, dynamic>{};
     if (name != null) body['name'] = name;
     if (hourlyRate != null) body['hourly_rate'] = hourlyRate;
     if (dailyRate != null) body['daily_rate'] = dailyRate;
+    if (weeklyRate != null) body['weekly_rate'] = weeklyRate; // ADD THIS
 
     final response = await http.put(
       Uri.parse('$baseUrl/vehicles/$vehicleId'),
       headers: headers,
       body: json.encode(body),
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -600,6 +730,15 @@ class ApiService {
       }),
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -619,6 +758,15 @@ class ApiService {
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -630,6 +778,15 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -640,6 +797,15 @@ class ApiService {
       Uri.parse('$baseUrl/vehicles/$vehicleId'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -665,6 +831,15 @@ class ApiService {
       }),
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -679,10 +854,10 @@ class ApiService {
       'POST',
       Uri.parse('$baseUrl/rentals/phase2/documents'),
     );
-    
+
     request.headers.addAll(headers);
     request.fields['verification_token'] = verificationToken;
-    
+
     // Add license image
     final licenseFile = await http.MultipartFile.fromPath(
       'license_image',
@@ -690,7 +865,7 @@ class ApiService {
       contentType: MediaType('image', 'jpeg'),
     );
     request.files.add(licenseFile);
-    
+
     // Add aadhaar image if provided
     if (aadhaarImage != null) {
       final aadhaarFile = await http.MultipartFile.fromPath(
@@ -700,9 +875,19 @@ class ApiService {
       );
       request.files.add(aadhaarFile);
     }
-    
+
     final response = await request.send();
     final responseBody = await http.Response.fromStream(response);
+
+    if (response.statusCode == 401) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(responseBody.body);
   }
 
@@ -718,9 +903,9 @@ class ApiService {
       'POST',
       Uri.parse('$baseUrl/rentals/$rentalId/phase3/sign'),
     );
-    
+
     request.headers.addAll(headers);
-    
+
     // Add signed agreement image
     final signedAgreementFile = await http.MultipartFile.fromPath(
       'signed_agreement_image',
@@ -728,7 +913,7 @@ class ApiService {
       contentType: MediaType('image', 'jpeg'),
     );
     request.files.add(signedAgreementFile);
-    
+
     // Add customer with vehicle image if provided
     if (customerWithVehicleImage != null) {
       final customerImageFile = await http.MultipartFile.fromPath(
@@ -738,7 +923,7 @@ class ApiService {
       );
       request.files.add(customerImageFile);
     }
-    
+
     // Add vehicle condition video if provided
     if (vehicleConditionVideo != null) {
       final videoFile = await http.MultipartFile.fromPath(
@@ -748,9 +933,19 @@ class ApiService {
       );
       request.files.add(videoFile);
     }
-    
+
     final response = await request.send();
     final responseBody = await http.Response.fromStream(response);
+
+    if (response.statusCode == 401) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(responseBody.body);
   }
 
@@ -762,6 +957,15 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -772,6 +976,15 @@ class ApiService {
       Uri.parse('$baseUrl/rentals/active'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -790,6 +1003,15 @@ class ApiService {
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -800,6 +1022,15 @@ class ApiService {
       Uri.parse('$baseUrl/rentals/$rentalId'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -812,6 +1043,15 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -822,6 +1062,15 @@ class ApiService {
       Uri.parse('$baseUrl/rentals/$rentalId/cancel'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -839,17 +1088,18 @@ class ApiService {
       'POST',
       Uri.parse('$baseUrl/rentals/$rentalId/return'),
     );
-    
+
     request.headers.addAll(headers);
-    request.fields['vehicle_in_good_condition'] = vehicleInGoodCondition ? '1' : '0';
-    
+    request.fields['vehicle_in_good_condition'] =
+        vehicleInGoodCondition ? '1' : '0';
+
     if (damageAmount != null) {
       request.fields['damage_amount'] = damageAmount.toString();
     }
     if (damageDescription != null) {
       request.fields['damage_description'] = damageDescription;
     }
-    
+
     if (damageImages != null && damageImages.isNotEmpty) {
       for (final image in damageImages) {
         final damageFile = await http.MultipartFile.fromPath(
@@ -860,9 +1110,19 @@ class ApiService {
         request.files.add(damageFile);
       }
     }
-    
+
     final response = await request.send();
     final responseBody = await http.Response.fromStream(response);
+
+    if (response.statusCode == 401) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(responseBody.body);
   }
 
@@ -892,6 +1152,15 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -911,6 +1180,15 @@ class ApiService {
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -922,6 +1200,15 @@ class ApiService {
       Uri.parse('$baseUrl/wallet/transactions/$transactionId'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -945,6 +1232,15 @@ class ApiService {
       }),
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -965,6 +1261,15 @@ class ApiService {
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -982,6 +1287,15 @@ class ApiService {
         'payment_method': paymentMethod,
       }),
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -1008,6 +1322,15 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1028,6 +1351,15 @@ class ApiService {
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1039,16 +1371,35 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
   // Mark a single notification as read
-  Future<Map<String, dynamic>> markNotificationAsRead(int notificationId) async {
+  Future<Map<String, dynamic>> markNotificationAsRead(
+      int notificationId) async {
     final headers = await getHeaders();
     final response = await http.put(
       Uri.parse('$baseUrl/notifications/$notificationId/read'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -1061,6 +1412,15 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1071,6 +1431,15 @@ class ApiService {
       Uri.parse('$baseUrl/notifications/statistics'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -1083,6 +1452,15 @@ class ApiService {
       headers: headers,
     );
 
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1093,6 +1471,15 @@ class ApiService {
       Uri.parse('$baseUrl/notifications'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
 
     return json.decode(response.body);
   }
@@ -1106,6 +1493,16 @@ class ApiService {
       Uri.parse('$baseUrl/reports/summary'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1126,6 +1523,16 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/reports/earnings')
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1156,6 +1563,16 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/reports/rentals')
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1172,6 +1589,16 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/reports/top-vehicles')
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1186,6 +1613,16 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/reports/top-customers')
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1196,6 +1633,16 @@ class ApiService {
       Uri.parse('$baseUrl/reports/documents'),
       headers: headers,
     );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 
@@ -1226,7 +1673,16 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/reports/export/rentals')
         .replace(queryParameters: queryParams);
     final response = await http.get(uri, headers: headers);
-    
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     // For CSV export, the response is plain text
     if (response.statusCode == 200) {
       return {
@@ -1234,7 +1690,523 @@ class ApiService {
         'data': response.body,
       };
     }
-    
+
+    return json.decode(response.body);
+  }
+
+  // ==================== BUSINESS PROFILE MANAGEMENT ====================
+
+  // Update Business Display Info (from API docs 3.6)
+  Future<Map<String, dynamic>> updateBusinessDisplay({
+    required String displayName,
+    required String displayAddress,
+    required String phone,
+    required String email,
+  }) async {
+    final headers = await getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/profile/business/display'),
+      headers: headers,
+      body: json.encode({
+        'display_name': displayName,
+        'display_address': displayAddress,
+        'phone': phone,
+        'email': email,
+      }),
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Update Business Location (from API docs 3.10)
+  Future<Map<String, dynamic>> updateBusinessLocation({
+    required double latitude,
+    required double longitude,
+    required String address,
+  }) async {
+    final headers = await getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/profile/location'),
+      headers: headers,
+      body: json.encode({
+        'latitude': latitude,
+        'longitude': longitude,
+        'address': address,
+      }),
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Add/Verify GST Number (from API docs 3.8)
+  Future<Map<String, dynamic>> addGstNumber({
+    required String gstNumber,
+    required String businessName,
+  }) async {
+    final headers = await getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/profile/gst/add'),
+      headers: headers,
+      body: json.encode({
+        'gst_number': gstNumber,
+        'business_name': businessName,
+      }),
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get GST Status (from API docs 3.9)
+  Future<Map<String, dynamic>> getGstStatus() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/profile/gst/status'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get Business Verification Status (from API docs 3.7)
+  Future<Map<String, dynamic>> getBusinessVerificationStatus() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/profile/business/status'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Upload Business Logo (from API docs 3.11)
+  Future<Map<String, dynamic>> uploadBusinessLogo(File logoFile) async {
+    final headers = await getMultipartHeaders();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/profile/business/logo'),
+    );
+
+    request.headers.addAll(headers);
+    request.files.add(await http.MultipartFile.fromPath(
+      'logo',
+      logoFile.path,
+      contentType: MediaType('image', 'jpeg'),
+    ));
+
+    final response = await request.send();
+    final responseBody = await http.Response.fromStream(response);
+
+    if (response.statusCode == 401) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(responseBody.body);
+  }
+
+  // ==================== SETTINGS MANAGEMENT ====================
+
+  // Get all settings (from API docs 11.1)
+  Future<Map<String, dynamic>> getSettings() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/settings'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Update single setting (from API docs 11.4)
+  Future<Map<String, dynamic>> updateSetting(
+    String key,
+    dynamic value,
+    String type,
+  ) async {
+    final headers = await getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/settings/$key'),
+      headers: headers,
+      body: json.encode({
+        'value': value,
+        'type': type,
+      }),
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Update multiple settings (from API docs 11.2)
+  Future<Map<String, dynamic>> updateMultipleSettings(
+      Map<String, Map<String, dynamic>> settings) async {
+    final headers = await getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/settings'),
+      headers: headers,
+      body: json.encode(settings),
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get specific setting (from API docs 11.3)
+  Future<Map<String, dynamic>> getSetting(String key) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/settings/$key'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Reset settings to defaults (from API docs 11.9)
+  Future<Map<String, dynamic>> resetSettings(
+      {List<String>? keys, bool all = false}) async {
+    final headers = await getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/settings/reset'),
+      headers: headers,
+      body: json.encode({
+        if (keys != null) 'keys': keys,
+        'all': all,
+      }),
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // ==================== LEGAL PAGES ====================
+
+  // Get all legal pages
+  Future<Map<String, dynamic>> getLegalPages() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/legal/pages'),
+      headers: {'Accept': 'application/json'},
+    );
+    return json.decode(response.body);
+  }
+
+  // Get specific legal page by slug
+  Future<Map<String, dynamic>> getLegalPage(String slug) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/legal/pages/$slug'),
+      headers: {'Accept': 'application/json'},
+    );
+    return json.decode(response.body);
+  }
+
+  // ==================== CUSTOMER MANAGEMENT (For Shop Owners) ====================
+  // Note: These endpoints are for shop owners to manage their customers
+  // according to API docs section 5
+
+  // Get all customers (from API docs 5.1)
+  Future<Map<String, dynamic>> getCustomers({
+    int perPage = 20,
+    String? search,
+    String? sortBy,
+    String? sortOrder,
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = <String, String>{
+      'per_page': perPage.toString(),
+    };
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (sortBy != null) queryParams['sort_by'] = sortBy;
+    if (sortOrder != null) queryParams['sort_order'] = sortOrder;
+
+    final uri =
+        Uri.parse('$baseUrl/customers').replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Search customers (from API docs 5.2)
+  Future<Map<String, dynamic>> searchCustomers(String query) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse(
+          '$baseUrl/customers/search?query=${Uri.encodeComponent(query)}'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get customer details (from API docs 5.3)
+  Future<Map<String, dynamic>> getCustomerDetails(int customerId) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/customers/$customerId'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get customer rental history (from API docs 5.6)
+  Future<Map<String, dynamic>> getCustomerRentalHistory(
+    int customerId, {
+    int perPage = 15,
+  }) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse(
+          '$baseUrl/customers/$customerId/rental-history?per_page=$perPage'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get customer statistics (from API docs 5.5)
+  Future<Map<String, dynamic>> getCustomerStatistics(int customerId) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/customers/$customerId/statistics'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get customers with incomplete documentation (from API docs 5.7)
+  Future<Map<String, dynamic>> getCustomersIncompleteDocs(
+      {int perPage = 20}) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/customers/incomplete-documents?per_page=$perPage'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get verified customers (from API docs 5.8)
+  Future<Map<String, dynamic>> getVerifiedCustomers({int perPage = 20}) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/customers/verified?per_page=$perPage'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Check token validity
+  Future<bool> checkTokenValidity() async {
+    try {
+      final token = await _storage.read(key: 'user_token');
+      if (token == null || token.isEmpty) {
+        return false;
+      }
+
+      // Check token expiry if stored
+      final expiryStr = await _storage.read(key: 'token_expiry');
+      if (expiryStr != null) {
+        try {
+          final expiry = DateTime.parse(expiryStr);
+          if (DateTime.now().isAfter(expiry)) {
+            await _handleUnauthorizedResponse();
+            return false;
+          }
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      }
+
+      final headers = await getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/me'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 401) {
+        await _handleUnauthorizedResponse();
+        return false;
+      }
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Token validation error: $e');
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> getProfile() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/profile'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
     return json.decode(response.body);
   }
 }

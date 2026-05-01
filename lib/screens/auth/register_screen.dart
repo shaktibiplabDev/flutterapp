@@ -5,6 +5,7 @@ import '../../widgets/google_signin_button.dart';
 import 'login_screen.dart';
 import 'google_phone_screen.dart';
 import 'setup_password_screen.dart';
+import 'package:flutter/gestures.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -24,6 +25,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _termsAccepted = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -65,6 +67,14 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    if (!_termsAccepted) {
+      _showSnackBar(
+        'Please accept Terms & Conditions to continue',
+        isError: true,
+      );
+      return;
+    }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.register(
@@ -81,7 +91,6 @@ class _RegisterScreenState extends State<RegisterScreen>
         isError: false,
       );
 
-      // Instant navigation - no transition
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -96,6 +105,14 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   void _handleGoogleSuccess() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    if (!_termsAccepted) {
+      _showSnackBar(
+        'Please accept Terms & Conditions to continue',
+        isError: true,
+      );
+      return;
+    }
 
     if (authProvider.needsPhoneForGoogle) {
       Navigator.pushReplacement(
@@ -135,6 +152,232 @@ class _RegisterScreenState extends State<RegisterScreen>
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 3),
       ),
+    );
+  }
+
+  void _showTermsDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Terms & Conditions',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Divider(height: 2),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTermsSection(
+                      title: '1. Acceptance of Terms',
+                      content: 'By registering and using EKiraya, you agree to be bound by these Terms of Service. If you disagree with any part of the terms, you may not use our services.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: '2. Description of Service',
+                      content: 'EKiraya provides a platform for vehicle rental management including vehicle listing, customer verification, digital payments, and rental agreement generation.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: '3. User Responsibilities',
+                      content: '• Maintain accurate account information\n• Keep your login credentials secure\n• Comply with all applicable laws\n• Not misuse or abuse the platform\n• Provide truthful information',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: '4. Privacy Policy',
+                      content: 'Your privacy is important to us. We collect and process personal data in accordance with our Privacy Policy. By using our services, you consent to such collection and use.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: '5. Payments and Fees',
+                      content: 'All payments are processed securely. Verification fees are non-refundable. Platform fees may apply as per our fee structure.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: '6. Termination',
+                      content: 'We may terminate or suspend your account immediately for violations of these Terms.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: '7. Limitation of Liability',
+                      content: 'EKiraya shall not be liable for any indirect, incidental, or consequential damages arising from your use of the platform.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: '8. Governing Law',
+                      content: 'These terms shall be governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of courts in Bhubaneswar, Odisha.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Close'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPrivacyDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Privacy Policy',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Divider(height: 2),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTermsSection(
+                      title: 'Information We Collect',
+                      content: '• Account Information: Name, email, phone number\n• Business Information: GST, address, business details\n• Vehicle Information: Registration, photos, documents\n• Usage Data: App interactions, features used',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: 'How We Use Your Information',
+                      content: '• Process vehicle registrations and rentals\n• Verify customer documents\n• Manage wallet transactions\n• Improve our services\n• Comply with legal obligations',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: 'Data Security',
+                      content: 'We implement industry-standard security measures including encryption, secure APIs, and regular security audits to protect your data.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: 'Data Sharing',
+                      content: 'We do not sell your personal information. We may share data with:\n• Payment processors\n• Legal authorities when required\n• Service providers for platform operation',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: 'Your Rights',
+                      content: '• Access your data\n• Correct inaccuracies\n• Request deletion\n• Opt-out of marketing\n• Export your data',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTermsSection(
+                      title: 'Contact Us',
+                      content: 'Email: privacy@ekiraya.com\nPhone: +91 9876543210\nAddress: Bhubaneswar, Odisha, India',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Close'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTermsSection({
+    required String title,
+    required String content,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          content,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey.shade700,
+            height: 1.5,
+          ),
+        ),
+      ],
     );
   }
 
@@ -561,7 +804,72 @@ class _RegisterScreenState extends State<RegisterScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // Terms and Conditions Checkbox
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: Checkbox(
+                            value: _termsAccepted,
+                            onChanged: (value) {
+                              setState(() {
+                                _termsAccepted = value ?? false;
+                              });
+                            },
+                            activeColor: Colors.black,
+                            checkColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade700,
+                                height: 1.4,
+                              ),
+                              children: [
+                                const TextSpan(text: 'I agree to the '),
+                                TextSpan(
+                                  text: 'Terms & Conditions',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = _showTermsDialog,
+                                ),
+                                const TextSpan(text: ' and '),
+                                TextSpan(
+                                  text: 'Privacy Policy',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = _showPrivacyDialog,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
 
                   // Register Button
                   Consumer<AuthProvider>(
@@ -572,7 +880,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                         child: ElevatedButton(
                           onPressed: _handleRegister,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black,
+                            backgroundColor: _termsAccepted ? Colors.black : Colors.grey.shade400,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(

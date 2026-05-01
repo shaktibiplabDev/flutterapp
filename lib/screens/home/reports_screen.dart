@@ -50,12 +50,14 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       final apiService = ApiService();
       final response = await apiService.getUnreadNotificationsCount();
       if (response['success'] == true && response['data'] != null) {
-        setState(() {
-          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
-        });
+        if (mounted) {
+          setState(() {
+            _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+          });
+        }
       }
     } catch (e) {
-      print('Error loading unread notification count: $e');
+      debugPrint('Error loading unread notification count: $e');
     }
   }
 
@@ -64,12 +66,12 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       context,
       MaterialPageRoute(builder: (context) => const NotificationsScreen()),
     );
-    
-    // Refresh unread count when coming back from notifications screen
     await _loadUnreadNotificationCount();
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
     });
@@ -86,20 +88,31 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         authProvider.getReportsDocuments(),
       ]);
       
-      setState(() {
-        _summaryData = results[0]['data'] ?? {};
-        _earningsData = results[1]['data'] ?? {};
-        _rentalsData = results[2]['data'] ?? {};
-        _topVehiclesData = results[3]['data'] ?? {};
-        _topCustomersData = results[4]['data'] ?? {};
-        _documentsData = results[5]['data'] ?? {};
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _summaryData = results[0]['data'] ?? {};
+          _earningsData = results[1]['data'] ?? {};
+          _rentalsData = results[2]['data'] ?? {};
+          _topVehiclesData = results[3]['data'] ?? {};
+          _topCustomersData = results[4]['data'] ?? {};
+          _documentsData = results[5]['data'] ?? {};
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      print('Error loading reports: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('Error loading reports: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load reports: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -107,15 +120,19 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
       final balance = await authProvider.getWalletBalance();
-      setState(() {
-        _walletBalance = balance;
-        _isLoadingWallet = false;
-      });
+      if (mounted) {
+        setState(() {
+          _walletBalance = balance;
+          _isLoadingWallet = false;
+        });
+      }
     } catch (e) {
-      print('Error loading wallet: $e');
-      setState(() {
-        _isLoadingWallet = false;
-      });
+      debugPrint('Error loading wallet: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingWallet = false;
+        });
+      }
     }
   }
 
@@ -129,26 +146,32 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       final file = File('${directory.path}/rentals_report_${DateTime.now().millisecondsSinceEpoch}.csv');
       await file.writeAsString(csvData);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Report exported to ${file.path}'),
-          backgroundColor: Colors.green.shade800,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report exported successfully'),
+            backgroundColor: Colors.green.shade800,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to export report'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to export report'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
-  String _formatCurrency(int amount) {
-    return '₹${amount.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (match) => '${match[1]},')}';
+  String _formatCurrency(dynamic amount) {
+    final value = amount is int ? amount : (amount?.toInt() ?? 0);
+    return '₹${value.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (match) => '${match[1]},')}';
   }
 
   String _formatDate(String? dateString) {
@@ -164,26 +187,31 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   void _onNavBarTap(int index) {
     if (index == _selectedIndex) return;
     
-    if (index == 0) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    } else if (index == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const VehiclesScreen()),
-      );
-    } else if (index == 2) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const BookingsScreen()),
-      );
-    } else if (index == 3) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const ProfileScreen()),
-      );
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const VehiclesScreen()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const BookingsScreen()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const ProfileScreen()),
+        );
+        break;
     }
   }
 
@@ -363,7 +391,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               Expanded(
                 child: _buildSummaryCard(
                   title: 'Total Earnings',
-                  value: _formatCurrency(earningsData['total_earnings'] ?? 0),
+                  value: _formatCurrency(earningsData['total_earnings']),
                   icon: Icons.currency_rupee,
                   color: Colors.green,
                 ),
@@ -385,7 +413,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               Expanded(
                 child: _buildSummaryCard(
                   title: 'Avg Rental Value',
-                  value: _formatCurrency(earningsData['average_rental_value']?.toInt() ?? 0),
+                  value: _formatCurrency(earningsData['average_rental_value']),
                   icon: Icons.trending_up,
                   color: Colors.orange,
                 ),
@@ -413,19 +441,19 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               children: [
                 _buildComparisonRow(
                   label: 'Current Month',
-                  value: _formatCurrency(currentMonth['earnings'] ?? 0),
+                  value: _formatCurrency(currentMonth['earnings']),
                   period: currentMonth['period']?['month'] ?? 'April 2026',
                 ),
                 const Divider(height: 24),
                 _buildComparisonRow(
                   label: 'Previous Month',
-                  value: _formatCurrency(_summaryData['previous_month']?['earnings'] ?? 0),
+                  value: _formatCurrency(_summaryData['previous_month']?['earnings']),
                   period: _summaryData['previous_month']?['period']?['month'] ?? 'March 2026',
                 ),
                 const Divider(height: 24),
                 _buildComparisonRow(
                   label: 'Year to Date',
-                  value: _formatCurrency(yearToDate['earnings'] ?? 0),
+                  value: _formatCurrency(yearToDate['earnings']),
                   period: yearToDate['period']?['year']?.toString() ?? '2026',
                 ),
               ],
@@ -512,7 +540,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                   ),
                 ),
                 Text(
-                  _formatCurrency(day['total'] ?? 0),
+                  _formatCurrency(day['total']),
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade900),
                 ),
               ],
@@ -546,7 +574,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               Expanded(
                 child: _buildMiniStatCard(
                   title: 'Total Earnings',
-                  value: _formatCurrency(summary['total_earnings'] ?? 0),
+                  value: _formatCurrency(summary['total_earnings']),
                   color: Colors.green,
                 ),
               ),
@@ -571,7 +599,9 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                   itemBuilder: (context, index) {
                     final rental = rentals[index];
                     final status = rental['status'] ?? 'unknown';
-                    final statusColor = status == 'completed' ? Colors.green : status == 'active' ? Colors.blue : status == 'cancelled' ? Colors.red : Colors.orange;
+                    final statusColor = status == 'completed' ? Colors.green : 
+                                       status == 'active' ? Colors.blue : 
+                                       status == 'cancelled' ? Colors.red : Colors.orange;
                     
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -645,7 +675,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                                 ),
                               ),
                               Text(
-                                _formatCurrency(rental['total_price'] ?? 0),
+                                _formatCurrency(rental['total_price']),
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade900),
                               ),
                             ],
@@ -697,7 +727,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               Expanded(
                 child: _buildMiniStatCard(
                   title: 'Total Revenue',
-                  value: _formatCurrency(summary['total_revenue'] ?? 0),
+                  value: _formatCurrency(summary['total_revenue']),
                   color: Colors.green,
                 ),
               ),
@@ -761,7 +791,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                                 ),
                               ),
                               Text(
-                                _formatCurrency(vehicle['total_revenue'] ?? 0),
+                                _formatCurrency(vehicle['total_revenue']),
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade700),
                               ),
                             ],
@@ -822,7 +852,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               Expanded(
                 child: _buildMiniStatCard(
                   title: 'Total Revenue',
-                  value: _formatCurrency(summary['total_revenue'] ?? 0),
+                  value: _formatCurrency(summary['total_revenue']),
                   color: Colors.green,
                 ),
               ),
@@ -880,7 +910,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                                 ),
                               ),
                               Text(
-                                _formatCurrency(customer['total_spent'] ?? 0),
+                                _formatCurrency(customer['total_spent']),
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade700),
                               ),
                             ],
@@ -897,7 +927,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                               Expanded(
                                 child: _buildCustomerStat(
                                   label: 'Avg Spend',
-                                  value: _formatCurrency(customer['average_spent']?.toInt() ?? 0),
+                                  value: _formatCurrency(customer['average_spent']),
                                 ),
                               ),
                             ],

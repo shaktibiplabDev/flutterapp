@@ -20,7 +20,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _notifications = [];
   int _unreadCount = 0;
-  int _selectedIndex = 3; // Profile tab index since notifications are part of profile
+  int _selectedIndex = 3;
   
   // Pagination
   int _currentPage = 1;
@@ -64,7 +64,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final apiService = ApiService();
     
     try {
-      // Load notifications using the specific method
       final response = await apiService.getNotifications(
         perPage: 20,
         page: _currentPage,
@@ -93,7 +92,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         }
       }
       
-      // Mark all as read when page is opened
       if (reset && _unreadCount > 0) {
         await _markAllAsRead();
       }
@@ -108,7 +106,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         });
       }
     } catch (e) {
-      print('Error loading notifications: $e');
+      debugPrint('Error loading notifications: $e');
       if (reset) {
         setState(() {
           _isLoading = false;
@@ -158,7 +156,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       }
     } catch (e) {
-      print('Error marking as read: $e');
+      debugPrint('Error marking as read: $e');
     }
   }
 
@@ -177,7 +175,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         });
       }
     } catch (e) {
-      print('Error marking all as read: $e');
+      debugPrint('Error marking all as read: $e');
     }
   }
 
@@ -206,7 +204,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       }
     } catch (e) {
-      print('Error deleting notification: $e');
+      debugPrint('Error deleting notification: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to delete notification'),
@@ -261,7 +259,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       }
     } catch (e) {
-      print('Error deleting all notifications: $e');
+      debugPrint('Error deleting all notifications: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to delete notifications'),
@@ -629,12 +627,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.chevron_right,
-                                size: 20,
-                                color: Colors.grey.shade400,
                               ),
                             ],
                           ),

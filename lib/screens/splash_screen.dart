@@ -23,9 +23,12 @@ class _SplashScreenState extends State<SplashScreen>
   
   String _loadingMessage = "Initializing...";
   int _loadingStep = 0;
+  bool _isCheckingAuth = false;
+  
   final List<String> _loadingMessages = [
     "Initializing...",
     "Checking credentials...",
+    "Validating session...",
     "Loading dashboard...",
     "Almost there...",
   ];
@@ -79,17 +82,19 @@ class _SplashScreenState extends State<SplashScreen>
 
     _animationController.forward();
     
-    // Simulate loading steps
+    // Start loading simulation
     _startLoadingSimulation();
     
-    // Check auth after animation
-    Future.delayed(const Duration(milliseconds: 2800), () {
-      _checkAuthAndNavigate();
+    // Check auth after minimum splash duration
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (!_isCheckingAuth && mounted) {
+        _checkAuthAndNavigate();
+      }
     });
   }
 
   void _startLoadingSimulation() {
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) {
         setState(() {
           _loadingStep = 1;
@@ -97,7 +102,7 @@ class _SplashScreenState extends State<SplashScreen>
         });
       }
     });
-    Future.delayed(const Duration(milliseconds: 1400), () {
+    Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted) {
         setState(() {
           _loadingStep = 2;
@@ -105,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
         });
       }
     });
-    Future.delayed(const Duration(milliseconds: 2000), () {
+    Future.delayed(const Duration(milliseconds: 1800), () {
       if (mounted) {
         setState(() {
           _loadingStep = 3;
@@ -113,61 +118,135 @@ class _SplashScreenState extends State<SplashScreen>
         });
       }
     });
+    Future.delayed(const Duration(milliseconds: 2200), () {
+      if (mounted) {
+        setState(() {
+          _loadingStep = 4;
+          _loadingMessage = _loadingMessages[4];
+        });
+      }
+    });
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    if (!mounted) return;
+    if (_isCheckingAuth || !mounted) return;
+    
+    _isCheckingAuth = true;
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
+      // Load stored auth data from secure storage
       await authProvider.loadStoredAuthData();
       
       final isAuthenticated = authProvider.isAuthenticated;
       
       if (isAuthenticated) {
-        await authProvider.refreshUser();
+        // Update loading message
+        if (mounted) {
+          setState(() {
+            _loadingMessage = "Validating session...";
+          });
+        }
         
-        if (authProvider.isAuthenticated && mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const HomeScreen(),
-              settings: const RouteSettings(name: '/home'),
-            ),
-          );
-        } else if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const LoginScreen(),
-              settings: const RouteSettings(name: '/login'),
-            ),
-          );
+        // Validate token by fetching current user
+        final isValid = await authProvider.validateToken();
+        
+        if (isValid && mounted) {
+          // Refresh user data to get latest info
+          await authProvider.refreshUser();
+          
+          // Double check authentication after refresh
+          if (authProvider.isAuthenticated && mounted) {
+            // Navigate to home screen
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const HomeScreen(),
+                settings: const RouteSettings(name: '/home'),
+              ),
+            );
+            return;
+          }
+        }
+        
+        // Token invalid or refresh failed - logout
+        if (mounted) {
+          await authProvider.logout();
+          _navigateToLogin();
         }
       } else {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const LoginScreen(),
-              settings: const RouteSettings(name: '/login'),
-            ),
-          );
-        }
+        // Not authenticated, go to login
+        _navigateToLogin();
       }
     } catch (e) {
-      print('Auth check error: $e');
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const LoginScreen(),
-            settings: const RouteSettings(name: '/login'),
-          ),
-        );
+      debugPrint('Auth check error: $e');
+      
+      // Check if it's a network error
+      if (e.toString().contains('SocketException') || 
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('Network is unreachable')) {
+        // Show network error dialog
+        if (mounted) {
+          _showNetworkErrorDialog();
+        }
+      } else {
+        _navigateToLogin();
       }
+    } finally {
+      _isCheckingAuth = false;
     }
+  }
+
+  void _navigateToLogin() {
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LoginScreen(),
+          settings: const RouteSettings(name: '/login'),
+        ),
+      );
+    }
+  }
+
+  void _showNetworkErrorDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.wifi_off, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Network Error'),
+          ],
+        ),
+        content: const Text(
+          'Unable to connect to the server. Please check your internet connection and try again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Retry connection
+              _checkAuthAndNavigate();
+            },
+            child: const Text('Retry'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _navigateToLogin();
+            },
+            child: const Text('Go to Login'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

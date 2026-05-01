@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/google_auth_service.dart';
+import '../services/api_interceptor.dart';
 
 class _CacheEntry<T> {
   final T data;
@@ -35,6 +36,9 @@ class AuthProvider extends ChangeNotifier {
   final Map<String, _CacheEntry<Map<String, dynamic>>> _responseCache = {};
   final Map<String, Future<Map<String, dynamic>>> _inFlightRequests = {};
 
+  final StreamController<void> _unauthorizedController =
+      StreamController<void>.broadcast();
+  Stream<void> get onUnauthorized => _unauthorizedController.stream;
   // Getters
   User? get user => _user;
   String? get token => _token;
@@ -77,6 +81,15 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final result = await future;
+
+      // Check for unauthorized response
+      if (result['unauthorized'] == true ||
+          result['message']?.toString().contains('Session expired') == true ||
+          result['message']?.toString().contains('Unauthenticated') == true) {
+        await handleUnauthorized();
+        return result;
+      }
+
       final shouldCache = !cacheOnlySuccess || result['success'] == true;
       if (shouldCache) {
         _responseCache[key] = _CacheEntry<Map<String, dynamic>>(
@@ -114,6 +127,15 @@ class AuthProvider extends ChangeNotifier {
     _invalidateCacheByPrefix('rentalStats:');
     _invalidateCacheByPrefix('rentalDetails:');
     _invalidateCacheByPrefix('rentalPhase:');
+  }
+
+  void _invalidateBusinessCache() {
+    _invalidateCacheByPrefix('business:');
+    _invalidateCacheByPrefix('gst:');
+  }
+
+  void _invalidateCustomersCache() {
+    _invalidateCacheByPrefix('customers:');
   }
 
   // Register
@@ -527,11 +549,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Update vehicle
+
+// Update vehicle
   Future<bool> updateVehicle(
     String vehicleId, {
     String? name,
     int? hourlyRate,
     int? dailyRate,
+    int? weeklyRate, // ADD THIS
   }) async {
     _setLoading(true);
     _clearError();
@@ -542,6 +567,7 @@ class AuthProvider extends ChangeNotifier {
         name: name,
         hourlyRate: hourlyRate,
         dailyRate: dailyRate,
+        weeklyRate: weeklyRate, // ADD THIS
       );
 
       _setLoading(false);
@@ -673,6 +699,7 @@ class AuthProvider extends ChangeNotifier {
       if (response['success'] == true) {
         _invalidateWalletCache();
         _invalidateRentalCache();
+        _invalidateCustomersCache();
       }
       return response;
     } catch (e) {
@@ -1083,7 +1110,8 @@ class AuthProvider extends ChangeNotifier {
     bool forceRefresh = false,
   }) async {
     try {
-      final cacheKey = 'reports:earnings:${startDate ?? 'na'}:${endDate ?? 'na'}:${month ?? 'na'}:${year ?? 'na'}';
+      final cacheKey =
+          'reports:earnings:${startDate ?? 'na'}:${endDate ?? 'na'}:${month ?? 'na'}:${year ?? 'na'}';
       return await _cachedMapRequest(
         key: cacheKey,
         ttl: const Duration(minutes: 5),
@@ -1114,7 +1142,8 @@ class AuthProvider extends ChangeNotifier {
     bool forceRefresh = false,
   }) async {
     try {
-      final cacheKey = 'reports:rentals:${startDate ?? 'na'}:${endDate ?? 'na'}:${date ?? 'na'}:${status ?? 'na'}:${vehicleId ?? 'na'}:${customerId ?? 'na'}:$perPage';
+      final cacheKey =
+          'reports:rentals:${startDate ?? 'na'}:${endDate ?? 'na'}:${date ?? 'na'}:${status ?? 'na'}:${vehicleId ?? 'na'}:${customerId ?? 'na'}:$perPage';
       return await _cachedMapRequest(
         key: cacheKey,
         ttl: const Duration(minutes: 3),
@@ -1221,22 +1250,434 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // ==================== BUSINESS PROFILE MANAGEMENT ====================
+
+  // Update Business Display Info (API 3.6)
+  Future<bool> updateBusinessDisplay({
+    required String displayName,
+    required String displayAddress,
+    required String phone,
+    required String email,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.updateBusinessDisplay(
+        displayName: displayName,
+        displayAddress: displayAddress,
+        phone: phone,
+        email: email,
+      );
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        _invalidateBusinessCache();
+        await refreshUser();
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to update business info';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Error updating business info: $e';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Update Business Location (API 3.10)
+  Future<bool> updateBusinessLocation({
+    required double latitude,
+    required double longitude,
+    required String address,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.updateBusinessLocation(
+        latitude: latitude,
+        longitude: longitude,
+        address: address,
+      );
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        _invalidateBusinessCache();
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to update location';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Error updating location: $e';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Add/Verify GST Number (API 3.8)
+  Future<bool> addGstNumber({
+    required String gstNumber,
+    required String businessName,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.addGstNumber(
+        gstNumber: gstNumber,
+        businessName: businessName,
+      );
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        _invalidateBusinessCache();
+        await refreshUser();
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'GST verification failed';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Error verifying GST: $e';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Get GST Status (API 3.9)
+  Future<Map<String, dynamic>> getGstStatus({bool forceRefresh = false}) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'business:gst',
+        ttl: const Duration(minutes: 30),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getGstStatus(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get Business Verification Status (API 3.7)
+  Future<Map<String, dynamic>> getBusinessVerificationStatus(
+      {bool forceRefresh = false}) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'business:verification',
+        ttl: const Duration(minutes: 15),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getBusinessVerificationStatus(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Upload Business Logo (API 3.11)
+  Future<bool> uploadBusinessLogo(File logoFile) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.uploadBusinessLogo(logoFile);
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        _invalidateBusinessCache();
+        await refreshUser();
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to upload logo';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Error uploading logo: $e';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // ==================== SETTINGS MANAGEMENT ====================
+
+  // Get all settings (API 11.1)
+  Future<Map<String, dynamic>> getSettings({bool forceRefresh = false}) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'settings:all',
+        ttl: const Duration(minutes: 10),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getSettings(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Update single setting (API 11.4)
+  Future<bool> updateSetting(String key, dynamic value, String type) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.updateSetting(key, value, type);
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        _invalidateCacheByPrefix('settings:');
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to update setting';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Error updating setting: $e';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Update multiple settings (API 11.2)
+  Future<bool> updateMultipleSettings(
+      Map<String, Map<String, dynamic>> settings) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.updateMultipleSettings(settings);
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        _invalidateCacheByPrefix('settings:');
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to update settings';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Error updating settings: $e';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // Get specific setting (API 11.3)
+  Future<Map<String, dynamic>> getSetting(String key,
+      {bool forceRefresh = false}) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'settings:$key',
+        ttl: const Duration(minutes: 10),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getSetting(key),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Reset settings (API 11.9)
+  Future<bool> resetSettings({List<String>? keys, bool all = false}) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.resetSettings(keys: keys, all: all);
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        _invalidateCacheByPrefix('settings:');
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to reset settings';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Error resetting settings: $e';
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // ==================== LEGAL PAGES ====================
+
+  // Get all legal pages
+  Future<Map<String, dynamic>> getLegalPages(
+      {bool forceRefresh = false}) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'legal:pages',
+        ttl: const Duration(days: 7), // Legal pages don't change often
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getLegalPages(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get specific legal page
+  Future<Map<String, dynamic>> getLegalPage(String slug,
+      {bool forceRefresh = false}) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'legal:page:$slug',
+        ttl: const Duration(days: 7),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getLegalPage(slug),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // ==================== CUSTOMER MANAGEMENT ====================
+
+  // Get all customers (API 5.1)
+  Future<Map<String, dynamic>> getCustomers({
+    int perPage = 20,
+    String? search,
+    String? sortBy,
+    String? sortOrder,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final cacheKey =
+          'customers:list:$perPage:${search ?? 'none'}:${sortBy ?? 'none'}:${sortOrder ?? 'none'}';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getCustomers(
+          perPage: perPage,
+          search: search,
+          sortBy: sortBy,
+          sortOrder: sortOrder,
+        ),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Search customers (API 5.2)
+  Future<Map<String, dynamic>> searchCustomers(String query,
+      {bool forceRefresh = false}) async {
+    try {
+      final cacheKey = 'customers:search:$query';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(seconds: 15),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.searchCustomers(query),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get customer details (API 5.3)
+  Future<Map<String, dynamic>> getCustomerDetails(int customerId,
+      {bool forceRefresh = false}) async {
+    try {
+      final cacheKey = 'customers:details:$customerId';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(minutes: 5),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getCustomerDetails(customerId),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get customer rental history (API 5.6)
+  Future<Map<String, dynamic>> getCustomerRentalHistory(
+    int customerId, {
+    int perPage = 15,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final cacheKey = 'customers:rentals:$customerId:$perPage';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(seconds: 20),
+        forceRefresh: forceRefresh,
+        request: () =>
+            _apiService.getCustomerRentalHistory(customerId, perPage: perPage),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get customer statistics (API 5.5)
+  Future<Map<String, dynamic>> getCustomerStatistics(int customerId,
+      {bool forceRefresh = false}) async {
+    try {
+      final cacheKey = 'customers:stats:$customerId';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(minutes: 10),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getCustomerStatistics(customerId),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get customers with incomplete documentation (API 5.7)
+  Future<Map<String, dynamic>> getCustomersIncompleteDocs(
+      {int perPage = 20, bool forceRefresh = false}) async {
+    try {
+      final cacheKey = 'customers:incomplete:$perPage';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getCustomersIncompleteDocs(perPage: perPage),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get verified customers (API 5.8)
+  Future<Map<String, dynamic>> getVerifiedCustomers(
+      {int perPage = 20, bool forceRefresh = false}) async {
+    try {
+      final cacheKey = 'customers:verified:$perPage';
+      return await _cachedMapRequest(
+        key: cacheKey,
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getVerifiedCustomers(perPage: perPage),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // ==================== UTILITIES ====================
 
   // Refresh user data
   Future<void> refreshUser() async {
     try {
       final response = await _apiService.getCurrentUser();
-      if (response['data']?['user'] != null) {
+      if (response['success'] == true && response['data']?['user'] != null) {
         _user = User.fromJson(response['data']['user']);
         notifyListeners();
+      } else if (response['unauthorized'] == true) {
+        await handleUnauthorized();
       }
     } catch (e) {
       print('Refresh user error: $e');
     }
   }
-
-  // Add this method to your AuthProvider class (providers/auth_provider.dart)
 
   Future<void> loadStoredAuthData() async {
     try {
@@ -1256,6 +1697,13 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       print('Error loading stored auth data: $e');
     }
+  }
+
+  // Clear all caches
+  void clearAllCaches() {
+    _responseCache.clear();
+    _inFlightRequests.clear();
+    notifyListeners();
   }
 
   // Logout
@@ -1280,6 +1728,49 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // Check if token is valid on app resume
+  Future<bool> validateToken() async {
+    if (_token == null) return false;
+
+    try {
+      final response = await _apiService.getCurrentUser();
+      if (response['success'] == true) {
+        // Token is valid, update user data
+        if (response['data']?['user'] != null) {
+          _user = User.fromJson(response['data']['user']);
+          notifyListeners();
+        }
+        return true;
+      } else if (response['unauthorized'] == true ||
+          response['status_code'] == 401 ||
+          response['message']?.toString().contains('Unauthenticated') == true) {
+        // Token invalid
+        await logout();
+        return false;
+      }
+      return true;
+    } catch (e) {
+      // Network error, assume token is still valid but show warning
+      print('Token validation error: $e');
+      return true;
+    }
+  }
+
+// Auto logout on 401 response from any API call
+  Future<void> handleUnauthorized() async {
+    await logout();
+    // Emit unauthorized event to all listeners
+    _unauthorizedController.add(null);
+    // Notify via navigator key if available
+    if (ApiInterceptor.navigatorKey.currentContext != null) {
+      // Use WidgetsBinding to ensure it's called after build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ApiInterceptor.handleUnauthorized(
+            ApiInterceptor.navigatorKey.currentContext!);
+      });
+    }
+  }
+
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
@@ -1292,5 +1783,45 @@ class AuthProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _unauthorizedController.close();
+    super.dispose();
+  }
+
+  // Change password
+  Future<bool> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final response = await _apiService.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        newPasswordConfirmation: newPasswordConfirmation,
+      );
+
+      _setLoading(false);
+      if (response['success'] == true) {
+        // Update token if returned
+        if (response['data']?['new_token'] != null) {
+          _token = response['data']['new_token'];
+        }
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to change password';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Network error: $e';
+      _setLoading(false);
+      return false;
+    }
   }
 }

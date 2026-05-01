@@ -8,6 +8,8 @@ import 'vehicles_screen.dart';
 import 'bookings_screen.dart';
 import 'wallet_screen.dart';
 import 'notifications_screen.dart';
+import 'change_password_screen.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,7 +25,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _walletBalance = 0;
   User? _user;
   Map<String, dynamic> _statistics = {};
+  Map<String, dynamic> _businessData = {};
   int _unreadNotificationCount = 0;
+  int _totalVehicles = 0;
+  String? _businessLogoUrl;
 
   @override
   void initState() {
@@ -37,12 +42,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final apiService = ApiService();
       final response = await apiService.getUnreadNotificationsCount();
       if (response['success'] == true && response['data'] != null) {
-        setState(() {
-          _unreadNotificationCount = response['data']['unread_count'] ?? 0;
-        });
+        if (mounted) {
+          setState(() {
+            _unreadNotificationCount = response['data']['unread_count'] ?? 0;
+          });
+        }
       }
     } catch (e) {
-      print('Error loading unread notification count: $e');
+      debugPrint('Error loading unread notification count: $e');
     }
   }
 
@@ -51,8 +58,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context,
       MaterialPageRoute(builder: (context) => const NotificationsScreen()),
     );
-    
-    // Refresh unread count when coming back from notifications screen
     await _loadUnreadNotificationCount();
   }
 
@@ -61,6 +66,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _loadProfileData(),
       _loadWalletBalance(),
       _loadStatistics(),
+      _loadBusinessData(),
+      _loadVehiclesCount(),
     ]);
   }
 
@@ -69,23 +76,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       await authProvider.refreshUser();
-      setState(() {
-        _user = authProvider.user;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _user = authProvider.user;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      print('Error loading profile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load profile'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('Error loading profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to load profile'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadBusinessData() async {
+    final apiService = ApiService();
+    try {
+      final response = await apiService.getProfile();
+      if (mounted && response['success'] == true && response['data'] != null) {
+        final data = response['data'];
+        setState(() {
+          _businessData = data['business'] ?? {};
+          _businessLogoUrl = _businessData['logo_url'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading business data: $e');
+    }
+  }
+
+  Future<void> _loadVehiclesCount() async {
+    final apiService = ApiService();
+    try {
+      final response = await apiService.getVehicles(perPage: 100);
+      if (mounted && response['success'] == true) {
+        final vehicles = response['data'] as List? ?? [];
+        setState(() {
+          _totalVehicles = vehicles.length;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading vehicles count: $e');
     }
   }
 
@@ -93,15 +134,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
       final balance = await authProvider.getWalletBalance();
-      setState(() {
-        _walletBalance = balance;
-        _isLoadingWallet = false;
-      });
+      if (mounted) {
+        setState(() {
+          _walletBalance = balance;
+          _isLoadingWallet = false;
+        });
+      }
     } catch (e) {
-      print('Error loading wallet: $e');
-      setState(() {
-        _isLoadingWallet = false;
-      });
+      debugPrint('Error loading wallet: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingWallet = false;
+        });
+      }
     }
   }
 
@@ -109,31 +154,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
       final response = await authProvider.getRentalStatistics();
-      if (!mounted) return;
-      setState(() {
-        _statistics = _asMap(response['data']) ?? <String, dynamic>{};
-      });
+      if (mounted) {
+        setState(() {
+          _statistics = _asMap(response['data']) ?? <String, dynamic>{};
+        });
+      }
     } catch (_) {}
   }
 
   void _onNavBarTap(int index) {
     if (index == _selectedIndex) return;
 
-    if (index == 0) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    } else if (index == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const VehiclesScreen()),
-      );
-    } else if (index == 2) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const BookingsScreen()),
-      );
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const VehiclesScreen()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const BookingsScreen()),
+        );
+        break;
+      default:
+        break;
     }
   }
 
@@ -159,6 +211,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final value = _statistics[key];
     if (value == null) return fallback;
     return value.toString();
+  }
+
+  void _navigateToEditProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EditProfileScreen()),
+    ).then((_) {
+      _loadProfileData();
+      _loadWalletBalance();
+    });
   }
 
   @override
@@ -242,6 +304,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
+    final businessName = _businessData['display_name'] != null && _businessData['display_name'].toString().isNotEmpty
+        ? _businessData['display_name']
+        : _user?.name ?? 'Business Name';
+    
+    final businessAddress = _businessData['display_address'] != null && _businessData['display_address'].toString().isNotEmpty
+        ? _businessData['display_address']
+        : 'Address not set';
+    
+    final isGstVerified = _businessData['gst_verified'] == true;
+    final gstNumber = _businessData['gst_number'] ?? '';
+    final maskedGst = gstNumber.isNotEmpty && gstNumber.length >= 5
+        ? '${gstNumber.substring(0, 2)}****${gstNumber.substring(gstNumber.length - 3)}'
+        : '';
+    
+    final totalVehicles = _totalVehicles > 0 
+        ? _totalVehicles.toString()
+        : (_statistics['total_vehicles']?.toString() ?? 
+           _businessData['total_vehicles']?.toString() ?? 
+           '0');
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -314,15 +396,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           IconButton(
             icon: Icon(Icons.edit_outlined, color: Colors.grey.shade700),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Edit Profile coming soon'),
-                  backgroundColor: Colors.grey,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onPressed: _navigateToEditProfile,
           ),
         ],
       ),
@@ -336,62 +410,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Compact Profile Header - Horizontal layout
+              // Account Profile Card
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.grey.shade900,
-                      Colors.grey.shade700,
+                      Color(0xFF1A1A2E),
+                      Color(0xFF16213E),
+                      Color(0xFF0F3460),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
                 child: Row(
                   children: [
                     // Avatar
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: (_user?.avatar != null && _user!.avatar!.isNotEmpty)
-                            ? Image.network(
-                                _user!.avatar!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
-                                    Icons.person,
-                                    size: 35,
-                                    color: Colors.grey.shade600,
-                                  );
-                                },
-                              )
-                            : Icon(
-                                Icons.person,
-                                size: 35,
-                                color: Colors.grey.shade600,
-                              ),
+                    GestureDetector(
+                      onTap: _navigateToEditProfile,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: (_user?.avatar != null && _user!.avatar!.isNotEmpty)
+                              ? Image.network(
+                                  _user!.avatar!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Icon(
+                                      Icons.person,
+                                      size: 40,
+                                      color: Colors.grey.shade600,
+                                    );
+                                  },
+                                )
+                              : Icon(
+                                  Icons.person,
+                                  size: 40,
+                                  color: Colors.grey.shade600,
+                                ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -403,39 +482,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Text(
                             _user?.name ?? 'User',
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _user?.email ?? 'No email',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade300,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _user?.role ?? 'User',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.white,
+                          Row(
+                            children: [
+                              Icon(Icons.email_outlined, size: 14, color: Colors.grey.shade400),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _user?.email ?? 'No email',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.verified, size: 12, color: Colors.green.shade400),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _user?.role ?? 'User',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -445,26 +537,246 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
-              // Stats Cards
+              // Business Card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                child: Material(
+                  elevation: 4,
+                  shadowColor: Colors.black.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          const Color(0xFF2C3E50),
+                          const Color(0xFF3498DB),
+                          Colors.blue.shade700,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          top: -20,
+                          right: -20,
+                          child: Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: -30,
+                          left: -30,
+                          child: Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  // Business Logo
+                                  Container(
+                                    width: 60,
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.5),
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: ClipOval(
+                                      child: _businessLogoUrl != null && _businessLogoUrl!.isNotEmpty
+                                          ? Image.network(
+                                              _businessLogoUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Icon(
+                                                  Icons.storefront,
+                                                  size: 30,
+                                                  color: Colors.white,
+                                                );
+                                              },
+                                            )
+                                          : Icon(
+                                              Icons.storefront,
+                                              size: 30,
+                                              color: Colors.white,
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          businessName,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: isGstVerified 
+                                                ? Colors.green.withOpacity(0.3)
+                                                : Colors.orange.withOpacity(0.3),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                isGstVerified ? Icons.verified : Icons.info_outline,
+                                                size: 12,
+                                                color: isGstVerified ? Colors.green.shade300 : Colors.orange.shade300,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                isGstVerified ? 'GST Verified' : 'GST Not Verified',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: isGstVerified ? Colors.green.shade300 : Colors.orange.shade300,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 12),
+                              
+                              if (businessAddress.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.location_on, size: 14, color: Colors.white.withOpacity(0.7)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          businessAddress,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white.withOpacity(0.8),
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              
+                              if (isGstVerified && maskedGst.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.receipt, size: 14, color: Colors.white.withOpacity(0.7)),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'GST: $maskedGst',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.white.withOpacity(0.8),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              
+                              const SizedBox(height: 16),
+                              
+                              Row(
+                                children: [
+                                  _buildBusinessStatItem(
+                                    icon: Icons.directions_car,
+                                    value: totalVehicles,
+                                    label: 'Vehicles Owned',
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildBusinessStatItem(
+                                    icon: Icons.receipt_long,
+                                    value: _statText('total_rentals'),
+                                    label: 'Total Rentals',
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildBusinessStatItem(
+                                    icon: Icons.verified_user,
+                                    value: isGstVerified ? 'Verified' : 'Pending',
+                                    label: 'Status',
+                                  ),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 16),
+                              
+                              _buildBusinessActionButton(
+                                icon: Icons.edit,
+                                label: 'Edit Business',
+                                onTap: () {
+                                  Navigator.pushNamed(context, '/business-profile');
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
                     Expanded(
                       child: _buildStatCard(
-                        title: 'Total Rentals',
-                        value: _statText('total_rentals'),
-                        icon: Icons.receipt_long_outlined,
-                        color: Colors.blue,
+                        title: 'Active Rentals',
+                        value: _statText('active_rentals'),
+                        icon: Icons.play_circle_outlined,
+                        color: Colors.green,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildStatCard(
-                        title: 'Active Rentals',
-                        value: _statText('active_rentals'),
-                        icon: Icons.play_circle_outlined,
-                        color: Colors.green,
+                        title: 'Completed',
+                        value: _statText('completed_rentals'),
+                        icon: Icons.check_circle_outlined,
+                        color: Colors.purple,
                       ),
                     ),
                   ],
@@ -479,19 +791,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Expanded(
                       child: _buildStatCard(
-                        title: 'Completed',
-                        value: _statText('completed_rentals'),
-                        icon: Icons.check_circle_outlined,
-                        color: Colors.purple,
+                        title: 'Wallet Balance',
+                        value: '₹${_formatWalletAmount(_walletBalance)}',
+                        icon: Icons.account_balance_wallet_outlined,
+                        color: Colors.orange,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildStatCard(
-                        title: 'Wallet Balance',
-                        value: '₹${_formatWalletAmount(_walletBalance)}',
-                        icon: Icons.account_balance_wallet_outlined,
-                        color: Colors.orange,
+                        title: 'Total Earnings',
+                        value: '₹${_statText('total_earnings')}',
+                        icon: Icons.currency_rupee,
+                        color: Colors.blue,
                       ),
                     ),
                   ],
@@ -500,7 +812,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 20),
 
-              // Account Info Section
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
@@ -527,15 +838,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.phone_outlined,
                       title: 'Phone Number',
                       value: _user?.phone ?? 'Not provided',
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Update phone number coming soon'),
-                            backgroundColor: Colors.grey,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
+                      onTap: _showChangePhoneDialog,
                     ),
                     _buildInfoTile(
                       icon: Icons.verified_user_outlined,
@@ -546,8 +849,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         if (_user?.isEmailVerified == false) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Email verification coming soon'),
-                              backgroundColor: Colors.grey,
+                              content: Text('Please verify your email from the login screen'),
+                              backgroundColor: Colors.orange,
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -559,12 +862,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       title: 'Password',
                       value: '********',
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Change password coming soon'),
-                            backgroundColor: Colors.grey,
-                            behavior: SnackBarBehavior.floating,
-                          ),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
                         );
                       },
                     ),
@@ -574,7 +874,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 14),
 
-              // Settings Section
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
@@ -598,66 +897,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const Divider(height: 1, thickness: 0.5),
                     _buildSettingsTile(
-                      icon: Icons.notifications_outlined,
-                      title: 'Notifications',
+                      icon: Icons.settings_outlined,
+                      title: 'App Settings',
+                      subtitle: 'Notifications, language, preferences',
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Notification settings coming soon'),
-                            backgroundColor: Colors.grey,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/settings');
                       },
                     ),
-                    _buildSettingsTile(
-                      icon: Icons.language_outlined,
-                      title: 'Language',
-                      subtitle: 'English',
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Language settings coming soon'),
-                            backgroundColor: Colors.grey,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Text(
+                        'Support',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade900,
+                        ),
+                      ),
                     ),
+                    const Divider(height: 1, thickness: 0.5),
                     _buildSettingsTile(
                       icon: Icons.privacy_tip_outlined,
                       title: 'Privacy Policy',
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Privacy Policy coming soon'),
-                            backgroundColor: Colors.grey,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/legal/privacy');
+                      },
+                    ),
+                    _buildSettingsTile(
+                      icon: Icons.description_outlined,
+                      title: 'Terms of Service',
+                      onTap: () {
+                        Navigator.pushNamed(context, '/legal/terms');
+                      },
+                    ),
+                    _buildSettingsTile(
+                      icon: Icons.info_outline,
+                      title: 'About Us',
+                      onTap: () {
+                        Navigator.pushNamed(context, '/legal/about');
                       },
                     ),
                     _buildSettingsTile(
                       icon: Icons.help_outline,
                       title: 'Help & Support',
+                      subtitle: 'support@ekiraya.com',
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Help & Support coming soon'),
-                            backgroundColor: Colors.grey,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                    ),
-                    _buildSettingsTile(
-                      icon: Icons.info_outline,
-                      title: 'About',
-                      subtitle: 'Version 1.0.0',
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('About EKiraya coming soon'),
+                            content: Text('Email us at: support@ekiraya.com'),
                             backgroundColor: Colors.grey,
                             behavior: SnackBarBehavior.floating,
                           ),
@@ -670,7 +973,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 24),
 
-              // Logout Button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SizedBox(
@@ -770,6 +1072,117 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
         currentIndex: _selectedIndex,
         onTap: _onNavBarTap,
+      ),
+    );
+  }
+
+  Widget _buildBusinessStatItem({
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 18, color: Colors.white),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.white.withOpacity(0.8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBusinessActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18, color: Colors.white),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white.withOpacity(0.2),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  void _showChangePhoneDialog() {
+    final phoneController = TextEditingController(text: _user?.phone ?? '');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Update Phone Number'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter your new phone number'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                hintText: 'Phone Number',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.phone),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              _navigateToEditProfile();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Update'),
+          ),
+        ],
       ),
     );
   }
@@ -887,6 +1300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title,
                     style: TextStyle(
                       fontSize: 14,
+                      fontWeight: FontWeight.w500,
                       color: Colors.grey.shade900,
                     ),
                   ),

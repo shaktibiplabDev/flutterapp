@@ -31,6 +31,11 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   bool _isLoading = false;
   int _selectedIndex = 1;
   int _unreadNotificationCount = 0;
+  
+  // Track which pricing fields are filled
+  bool _hasHourlyRate = false;
+  bool _hasDailyRate = false;
+  bool _hasWeeklyRate = false;
 
   final List<String> _vehicleTypes = [
     'Car',
@@ -65,6 +70,11 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
   void initState() {
     super.initState();
     _loadUnreadNotificationCount();
+    
+    // Add listeners to track pricing fields
+    _hourlyRateController.addListener(_updatePricingStatus);
+    _dailyRateController.addListener(_updatePricingStatus);
+    _weeklyRateController.addListener(_updatePricingStatus);
   }
 
   @override
@@ -78,6 +88,14 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     super.dispose();
   }
 
+  void _updatePricingStatus() {
+    setState(() {
+      _hasHourlyRate = _hourlyRateController.text.trim().isNotEmpty;
+      _hasDailyRate = _dailyRateController.text.trim().isNotEmpty;
+      _hasWeeklyRate = _weeklyRateController.text.trim().isNotEmpty;
+    });
+  }
+
   Future<void> _loadUnreadNotificationCount() async {
     try {
       final apiService = ApiService();
@@ -88,7 +106,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
         });
       }
     } catch (e) {
-      print('Error loading unread notification count: $e');
+      debugPrint('Error loading unread notification count: $e');
     }
   }
 
@@ -97,13 +115,36 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
       context,
       MaterialPageRoute(builder: (context) => const NotificationsScreen()),
     );
-
-    // Refresh unread count when coming back from notifications screen
     await _loadUnreadNotificationCount();
   }
 
+  // Validate that at least one pricing field is filled
+  bool _validatePricing() {
+    return _hasHourlyRate || _hasDailyRate || _hasWeeklyRate;
+  }
+
+  // Get the price values with default 0 if not provided
+  int _getHourlyRate() => _hasHourlyRate ? int.parse(_hourlyRateController.text) : 0;
+  int _getDailyRate() => _hasDailyRate ? int.parse(_dailyRateController.text) : 0;
+  int _getWeeklyRate() => _hasWeeklyRate ? int.parse(_weeklyRateController.text) : 0;
+
   Future<void> _submitForm() async {
+    // First validate basic form
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    
+    // Then validate pricing
+    if (!_validatePricing()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter at least one pricing option (Hourly, Daily, or Weekly)'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
       return;
     }
 
@@ -117,9 +158,9 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
       name: _nameController.text.trim(),
       numberPlate: _numberPlateController.text.trim().toUpperCase(),
       type: _selectedType,
-      hourlyRate: int.parse(_hourlyRateController.text),
-      dailyRate: int.parse(_dailyRateController.text),
-      weeklyRate: int.parse(_weeklyRateController.text),
+      hourlyRate: _getHourlyRate(),
+      dailyRate: _getDailyRate(),
+      weeklyRate: _getWeeklyRate(),
       description: _descriptionController.text.trim(),
       features: _selectedFeatures,
       status: _selectedStatus,
@@ -132,7 +173,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Vehicle added successfully!'),
+          content: const Text('Vehicle added successfully!'),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -280,7 +321,30 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Basic Information Section - Compact
+                    // Info Banner for Pricing
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 20, color: Colors.blue.shade700),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'At least one pricing option (Hourly, Daily, or Weekly) is required.',
+                              style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Basic Information Section
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -307,7 +371,6 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          // Two fields in a row for name and number plate
                           Row(
                             children: [
                               Expanded(
@@ -342,7 +405,6 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          // Type and Status in a row
                           Row(
                             children: [
                               Expanded(
@@ -383,7 +445,7 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Pricing Section - Compact
+                    // Pricing Section - All fields optional but at least one required
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -421,11 +483,10 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                                   icon: Icons.speed,
                                   keyboardType: TextInputType.number,
                                   validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    if (int.tryParse(value) == null) {
-                                      return 'Invalid';
+                                    if (value != null && value.isNotEmpty) {
+                                      if (int.tryParse(value) == null) {
+                                        return 'Invalid number';
+                                      }
                                     }
                                     return null;
                                   },
@@ -440,11 +501,10 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                                   icon: Icons.calendar_today,
                                   keyboardType: TextInputType.number,
                                   validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    if (int.tryParse(value) == null) {
-                                      return 'Invalid';
+                                    if (value != null && value.isNotEmpty) {
+                                      if (int.tryParse(value) == null) {
+                                        return 'Invalid number';
+                                      }
                                     }
                                     return null;
                                   },
@@ -459,11 +519,10 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                                   icon: Icons.date_range,
                                   keyboardType: TextInputType.number,
                                   validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    if (int.tryParse(value) == null) {
-                                      return 'Invalid';
+                                    if (value != null && value.isNotEmpty) {
+                                      if (int.tryParse(value) == null) {
+                                        return 'Invalid number';
+                                      }
                                     }
                                     return null;
                                   },
@@ -471,12 +530,36 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                               ),
                             ],
                           ),
+                          // Warning message if no pricing field is filled
+                          if (!_validatePricing())
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.warning_amber, size: 16, color: Colors.orange.shade700),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Text(
+                                        'At least one pricing option is required',
+                                        style: TextStyle(fontSize: 11, color: Colors.orange),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 12),
 
-                    // Features Section - Compact with Wrap
+                    // Features Section
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -540,12 +623,21 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
                               );
                             }).toList(),
                           ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Select features available with this vehicle',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 12),
 
-                    // Description Section - Optional (removed validator)
+                    // Description Section
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(

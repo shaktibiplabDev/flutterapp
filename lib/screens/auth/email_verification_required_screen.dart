@@ -22,8 +22,10 @@ class _EmailVerificationRequiredScreenState
     with SingleTickerProviderStateMixin {
   final _otpController = TextEditingController();
   bool _isLoading = false;
+  bool _isSendingEmail = false;
   int _resendCooldown = 60;
   bool _canResend = false;
+  bool _emailSent = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -51,8 +53,6 @@ class _EmailVerificationRequiredScreenState
 
     _animationController.forward();
 
-    _startResendTimer();
-
     // Auto-send OTP when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendVerificationOTP();
@@ -75,24 +75,33 @@ class _EmailVerificationRequiredScreenState
   }
 
   Future<void> _sendVerificationOTP() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isSendingEmail = true;
+      _emailSent = false;
+    });
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.sendEmailVerificationOTP(
       email: widget.email,
     );
 
-    setState(() => _isLoading = false);
+    setState(() {
+      _isSendingEmail = false;
+    });
 
-    if (!success && mounted) {
-      _showSnackBar(
-        authProvider.errorMessage ?? 'Failed to send OTP',
-        isError: true,
-      );
-    } else if (mounted) {
+    if (success && mounted) {
+      setState(() {
+        _emailSent = true;
+      });
+      _startResendTimer();
       _showSnackBar(
         'Verification code sent to ${widget.email}',
         isError: false,
+      );
+    } else if (mounted) {
+      _showSnackBar(
+        authProvider.errorMessage ?? 'Failed to send verification code. Please try again.',
+        isError: true,
       );
     }
   }
@@ -116,10 +125,9 @@ class _EmailVerificationRequiredScreenState
 
     if (success && mounted) {
       _showSnackBar('Email verified successfully! Please login.', isError: false);
-      await authProvider.refreshUser();
       
-      // Logout the user to force them to login again
-      await authProvider.logout();
+      // Refresh user data to update verification status
+      await authProvider.refreshUser();
       
       if (mounted) {
         // Navigate back to login screen
@@ -131,7 +139,7 @@ class _EmailVerificationRequiredScreenState
       }
     } else if (mounted) {
       _showSnackBar(
-        authProvider.errorMessage ?? 'Verification failed. Please try again.',
+        authProvider.errorMessage ?? 'Invalid verification code. Please try again.',
         isError: true,
       );
       _otpController.clear();
@@ -141,14 +149,14 @@ class _EmailVerificationRequiredScreenState
   Future<void> _resendOTP() async {
     if (!_canResend) return;
 
-    setState(() => _isLoading = true);
+    setState(() => _isSendingEmail = true);
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.resendEmailVerificationOTP(
       email: widget.email,
     );
 
-    setState(() => _isLoading = false);
+    setState(() => _isSendingEmail = false);
 
     if (success && mounted) {
       _startResendTimer();
@@ -176,7 +184,7 @@ class _EmailVerificationRequiredScreenState
             Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: isError ? Colors.red.shade800 : Colors.grey.shade800,
+        backgroundColor: isError ? Colors.red.shade800 : Colors.green.shade700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         margin: const EdgeInsets.all(16),
@@ -204,7 +212,6 @@ class _EmailVerificationRequiredScreenState
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: Colors.grey.shade900),
           onPressed: () {
-            // Navigate back to login
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -275,7 +282,7 @@ class _EmailVerificationRequiredScreenState
                     child: Column(
                       children: [
                         Text(
-                          'We\'ve sent a verification code to:',
+                          'Verification email will be sent to:',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade600,
@@ -309,207 +316,301 @@ class _EmailVerificationRequiredScreenState
                     ),
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 24),
 
-                  // OTP Input Section
+                  // Send Email Button
                   Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.grey.shade200,
-                        width: 1,
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _isSendingEmail ? null : _sendVerificationOTP,
+                      icon: _isSendingEmail
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(Icons.send_outlined),
+                      label: Text(
+                        _isSendingEmail 
+                            ? 'Sending...' 
+                            : _emailSent 
+                                ? 'Verification Code Sent!' 
+                                : 'Send Verification Code',
+                        style: const TextStyle(fontSize: 16),
                       ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Enter Verification Code',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade800,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Pinput
-                          Pinput(
-                            controller: _otpController,
-                            length: 6,
-                            keyboardType: TextInputType.number,
-                            onCompleted: (pin) {
-                              _verifyOTP();
-                            },
-                            defaultPinTheme: PinTheme(
-                              width: 50,
-                              height: 50,
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.white,
-                              ),
-                              textStyle: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade900,
-                              ),
-                            ),
-                            focusedPinTheme: PinTheme(
-                              width: 50,
-                              height: 50,
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: Colors.grey.shade600, width: 2),
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.white,
-                              ),
-                              textStyle: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade900,
-                              ),
-                            ),
-                            submittedPinTheme: PinTheme(
-                              width: 50,
-                              height: 50,
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(
-                                border:
-                                    Border.all(color: Colors.green.shade400),
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.green.shade50,
-                              ),
-                              textStyle: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green.shade700,
-                              ),
-                            ),
-                            errorPinTheme: PinTheme(
-                              width: 50,
-                              height: 50,
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.red.shade400),
-                                borderRadius: BorderRadius.circular(12),
-                                color: Colors.red.shade50,
-                              ),
-                              textStyle: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.red.shade700,
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // Resend Section
-                          Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (!_canResend) ...[
-                                  SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'Resend code in $_resendCooldown seconds',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade500,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ] else ...[
-                                  Icon(
-                                    Icons.access_time,
-                                    size: 18,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "Didn't receive code? ",
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: _resendOTP,
-                                    child: Text(
-                                      'Resend',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade900,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _emailSent ? Colors.green : Colors.black,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 32),
 
-                  // Verify Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _verifyOTP,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  // OTP Input Section (only show after email is sent)
+                  AnimatedCrossFade(
+                    firstChild: Container(
+                      height: 200,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.mark_email_read_outlined,
+                              size: 48,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Click "Send Verification Code" to continue',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.verified_outlined, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Verify Email',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
                     ),
+                    secondChild: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.grey.shade200,
+                          width: 1,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Enter Verification Code',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Pinput
+                            Pinput(
+                              controller: _otpController,
+                              length: 6,
+                              keyboardType: TextInputType.number,
+                              onCompleted: (pin) {
+                                _verifyOTP();
+                              },
+                              defaultPinTheme: PinTheme(
+                                width: 50,
+                                height: 50,
+                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.white,
+                                ),
+                                textStyle: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade900,
+                                ),
+                              ),
+                              focusedPinTheme: PinTheme(
+                                width: 50,
+                                height: 50,
+                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                      color: Colors.grey.shade600, width: 2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.white,
+                                ),
+                                textStyle: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade900,
+                                ),
+                              ),
+                              submittedPinTheme: PinTheme(
+                                width: 50,
+                                height: 50,
+                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  border:
+                                      Border.all(color: Colors.green.shade400),
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.green.shade50,
+                                ),
+                                textStyle: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green.shade700,
+                                ),
+                              ),
+                              errorPinTheme: PinTheme(
+                                width: 50,
+                                height: 50,
+                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.red.shade400),
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.red.shade50,
+                                ),
+                                textStyle: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.red.shade700,
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Resend Section
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (!_canResend) ...[
+                                    SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Resend code in $_resendCooldown seconds',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    Icon(
+                                      Icons.access_time,
+                                      size: 18,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "Didn't receive code? ",
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: _resendOTP,
+                                      child: Text(
+                                        'Resend',
+                                        style: TextStyle(
+                                          color: Colors.grey.shade900,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Help Text
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline, size: 14, color: Colors.blue.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Check your spam folder if you don\'t see the email in your inbox.',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    crossFadeState: _emailSent 
+                        ? CrossFadeState.showSecond 
+                        : CrossFadeState.showFirst,
+                    duration: const Duration(milliseconds: 300),
                   ),
+
+                  const SizedBox(height: 32),
+
+                  // Verify Button (only show after email sent)
+                  if (_emailSent)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _verifyOTP,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.verified_outlined, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Verify Email',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
 
                   const SizedBox(height: 20),
 
