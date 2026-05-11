@@ -24,10 +24,16 @@ class _BusinessProfileBannerState extends State<BusinessProfileBanner> {
   Future<void> _checkBusinessProfile() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
-      final response = await authProvider.getBusinessVerificationStatus();
+      final response = await authProvider.getProfile();
+      debugPrint('🔍 Profile Response: $response');
       if (mounted) {
         final data = response['data'];
         final business = data?['business'];
+        debugPrint('🔍 Business Data: $business');
+        debugPrint('🔍 Display Name: ${business?['display_name']}');
+        debugPrint('🔍 Display Address: ${business?['display_address']}');
+        debugPrint('🔍 Phone: ${business?['phone']}');
+        debugPrint('🔍 Email: ${business?['email']}');
         setState(() {
           // Business profile is complete if display_name, display_address, phone, and email exist
           _hasBusinessProfile = response['success'] == true && 
@@ -39,6 +45,7 @@ class _BusinessProfileBannerState extends State<BusinessProfileBanner> {
                                business['email'] != null;
           _isChecking = false;
         });
+        debugPrint('🔍 Has Business Profile: $_hasBusinessProfile');
       }
     } catch (e) {
       debugPrint('Error checking business profile: $e');

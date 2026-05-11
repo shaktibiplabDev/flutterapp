@@ -1368,20 +1368,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Get Business Verification Status (API 3.7)
-  Future<Map<String, dynamic>> getBusinessVerificationStatus(
-      {bool forceRefresh = false}) async {
-    try {
-      return await _cachedMapRequest(
-        key: 'business:verification',
-        ttl: const Duration(minutes: 15),
-        forceRefresh: forceRefresh,
-        request: () => _apiService.getBusinessVerificationStatus(),
-      );
-    } catch (e) {
-      return {'success': false, 'message': e.toString()};
-    }
-  }
 
   // Upload Business Logo (API 3.11)
   Future<bool> uploadBusinessLogo(File logoFile) async {

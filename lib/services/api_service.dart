@@ -1803,25 +1803,6 @@ class ApiService {
     return json.decode(response.body);
   }
 
-  // Get Business Verification Status (from API docs 3.7)
-  Future<Map<String, dynamic>> getBusinessVerificationStatus() async {
-    final headers = await getHeaders();
-    final response = await http.get(
-      Uri.parse('$baseUrl/profile/business/status'),
-      headers: headers,
-    );
-
-    if (_isUnauthorized(response)) {
-      await _handleUnauthorizedResponse();
-      return {
-        'success': false,
-        'message': 'Session expired. Please login again.',
-        'unauthorized': true
-      };
-    }
-
-    return json.decode(response.body);
-  }
 
   // Upload Business Logo (from API docs 3.11)
   Future<Map<String, dynamic>> uploadBusinessLogo(File logoFile) async {

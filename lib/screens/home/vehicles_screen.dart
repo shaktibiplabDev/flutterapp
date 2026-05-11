@@ -46,7 +46,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   Future<void> _checkBusinessProfile() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
-      final response = await authProvider.getBusinessVerificationStatus();
+      final response = await authProvider.getProfile();
       if (mounted) {
         final data = response['data'];
         final business = data?['business'];
