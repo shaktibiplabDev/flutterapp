@@ -10,6 +10,7 @@ import 'wallet_screen.dart';
 import 'add_vehicle_screen.dart';
 import 'new_rental_screen.dart';
 import 'notifications_screen.dart';
+import 'business_profile_screen.dart';
 
 class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({super.key});
@@ -27,6 +28,8 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   int _selectedIndex = 1;
   int _walletBalance = 0;
   int _unreadNotificationCount = 0;
+  bool _hasBusinessProfile = false;
+  bool _isCheckingBusinessProfile = true;
 
   @override
   void initState() {
@@ -35,7 +38,38 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
     Future.microtask(() {
       _loadData();
       _loadUnreadNotificationCount();
+      _checkBusinessProfile();
     });
+  }
+
+  /// Check if user has created business profile
+  Future<void> _checkBusinessProfile() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    try {
+      final response = await authProvider.getBusinessVerificationStatus();
+      if (mounted) {
+        final data = response['data'];
+        final business = data?['business'];
+        setState(() {
+          // Business profile is complete if display_name, display_address, phone, and email exist
+          _hasBusinessProfile = response['success'] == true && 
+                               data != null &&
+                               business != null &&
+                               business['display_name'] != null &&
+                               business['display_address'] != null &&
+                               business['phone'] != null &&
+                               business['email'] != null;
+          _isCheckingBusinessProfile = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking business profile: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingBusinessProfile = false;
+        });
+      }
+    }
   }
 
   @override
@@ -865,8 +899,8 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.add, color: Colors.grey.shade900),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AddVehicleScreen())),
+            icon: Icon(Icons.add, color: _hasBusinessProfile ? Colors.grey.shade900 : Colors.grey.shade400),
+            onPressed: _hasBusinessProfile ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AddVehicleScreen())) : _showBusinessRequiredMessage,
           ),
           IconButton(
             icon: Stack(
@@ -1111,20 +1145,22 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: isAvailable
+                                      child: OutlinedButton(
+                                        onPressed: isAvailable && _hasBusinessProfile
                                             ? () => Navigator.push(
                                                 context,
                                                 MaterialPageRoute(builder: (context) => NewRentalScreen(vehicleId: _getVehicleId(vehicle))),
                                               )
-                                            : null,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.black,
-                                          foregroundColor: Colors.white,
+                                            : _hasBusinessProfile ? null : _showBusinessRequiredMessage,
+                                        style: OutlinedButton.styleFrom(
+                                          side: BorderSide(color: isOnRent ? Colors.grey.shade200 : (_hasBusinessProfile ? Colors.red.shade400 : Colors.grey.shade300)),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          disabledBackgroundColor: Colors.grey.shade300,
+                                          disabledBackgroundColor: Colors.grey.shade100,
                                         ),
-                                        child: const Text('Rent'),
+                                        child: Text(
+                                          _hasBusinessProfile ? 'Rent' : 'Create business profile',
+                                          style: TextStyle(color: _hasBusinessProfile ? null : Colors.grey.shade500),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1184,10 +1220,33 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
           _selectedFilter = value;
         });
       },
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: isSelected ? color : Colors.white,
       selectedColor: color,
       checkmarkColor: Colors.white,
-      showCheckmark: false,
+      side: BorderSide(color: color, width: 1.5),
+    );
+  }
+
+  /// Show message when user taps disabled button
+  void _showBusinessRequiredMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please create your business profile first to use this feature'),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Create',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const BusinessProfileScreen(),
+              ),
+            ).then((_) => _checkBusinessProfile());
+          },
+        ),
+      ),
     );
   }
 }

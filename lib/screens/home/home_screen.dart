@@ -49,10 +49,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     try {
       final response = await authProvider.getBusinessVerificationStatus();
       if (mounted) {
+        final data = response['data'];
+        final business = data?['business'];
         setState(() {
+          // Business profile is complete if display_name, display_address, phone, and email exist
           _hasBusinessProfile = response['success'] == true && 
-                               response['data'] != null &&
-                               response['data']['is_profile_complete'] == true;
+                               data != null &&
+                               business != null &&
+                               business['display_name'] != null &&
+                               business['display_address'] != null &&
+                               business['phone'] != null &&
+                               business['email'] != null;
           _isCheckingBusinessProfile = false;
         });
       }

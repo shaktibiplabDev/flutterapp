@@ -13,6 +13,7 @@ import 'bookings_screen.dart';
 import 'profile_screen.dart';
 import 'wallet_screen.dart';
 import 'notifications_screen.dart';
+import 'business_profile_screen.dart';
 
 class NewRentalScreen extends StatefulWidget {
   final String? vehicleId;
@@ -65,12 +66,47 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
   
   // Notifications
   int _unreadNotificationCount = 0;
+  
+  // Business Profile
+  bool _hasBusinessProfile = false;
+  bool _isCheckingBusinessProfile = true;
 
   @override
   void initState() {
     super.initState();
     _loadInitialData();
     _loadUnreadNotificationCount();
+    _checkBusinessProfile();
+  }
+
+  /// Check if user has created business profile
+  Future<void> _checkBusinessProfile() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    try {
+      final response = await authProvider.getBusinessVerificationStatus();
+      if (mounted) {
+        final data = response['data'];
+        final business = data?['business'];
+        setState(() {
+          // Business profile is complete if display_name, display_address, phone, and email exist
+          _hasBusinessProfile = response['success'] == true && 
+                               data != null &&
+                               business != null &&
+                               business['display_name'] != null &&
+                               business['display_address'] != null &&
+                               business['phone'] != null &&
+                               business['email'] != null;
+          _isCheckingBusinessProfile = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking business profile: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingBusinessProfile = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadUnreadNotificationCount() async {
@@ -1395,9 +1431,9 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _isCompletingRental ? null : _phase3CompleteRental,
+              onPressed: (_isCompletingRental || !_hasBusinessProfile) ? null : (_hasBusinessProfile ? _phase3CompleteRental : _showBusinessRequiredMessage),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
+                backgroundColor: _hasBusinessProfile ? Colors.black : Colors.grey.shade400,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1405,7 +1441,7 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
               ),
               child: _isCompletingRental
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Start Rental', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  : Text(_hasBusinessProfile ? 'Start Rental' : 'Create business profile first', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -1633,6 +1669,29 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Show message when user taps disabled button
+  void _showBusinessRequiredMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please create your business profile first to use this feature'),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Create',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const BusinessProfileScreen(),
+              ),
+            ).then((_) => _checkBusinessProfile());
+          },
+        ),
+      ),
     );
   }
 }
