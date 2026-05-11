@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/location_picker.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,12 +27,14 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isUploadingLogo = false;
+  bool _isVerifyingGST = false;
   Map<String, dynamic>? _businessData;
   Map<String, dynamic>? _gstData;
   LatLng? _location;
   String _savedAddress = '';
   File? _selectedLogo;
   String? _logoUrl;
+  DateTime? _gstVerifiedAt;
   
   final ImagePicker _picker = ImagePicker();
 
@@ -91,6 +96,16 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
             _emailController.text = businessEmail;
             _legalNameController.text = legalName;
             _gstController.text = gstNumber;
+            
+            // Set GST verified date if available
+            final gstVerifiedAtStr = _businessData?['gst_verified_at'] ?? _gstData?['verified_at'];
+            if (gstVerifiedAtStr != null) {
+              try {
+                _gstVerifiedAt = DateTime.parse(gstVerifiedAtStr);
+              } catch (e) {
+                _gstVerifiedAt = null;
+              }
+            }
             
             _isLoading = false;
           });
@@ -276,6 +291,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
             duration: Duration(seconds: 2),
           ),
         );
+        // Invalidate profile cache to refresh business profile status
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        authProvider.invalidateProfileCache();
         await _loadBusinessData();
       }
     } catch (e) {
@@ -308,7 +326,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       return;
     }
     
-    setState(() => _isSaving = true);
+    setState(() => _isVerifyingGST = true);
     final apiService = ApiService();
     
     try {
@@ -318,6 +336,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       );
       
       if (response['success'] == true && mounted) {
+        setState(() {
+          _gstVerifiedAt = DateTime.now();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('GST verified! Business is now verified'),
@@ -325,6 +346,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+        // Invalidate profile cache to refresh business profile status
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        authProvider.invalidateProfileCache();
         await _loadBusinessData();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -347,7 +371,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() => _isVerifyingGST = false);
       }
     }
   }
@@ -363,20 +387,27 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     final isVerified = (_businessData?['gst_verified'] == true) || (_gstData?['is_verified'] == true);
     final hasBusinessData = _businessData != null && _businessData!.isNotEmpty;
     
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Business Profile'),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.grey.shade900,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadBusinessData,
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
+    return WillPopScope(
+      onWillPop: () async {
+        // Invalidate profile cache when back button is pressed
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        authProvider.invalidateProfileCache();
+        return true;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Business Profile'),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          foregroundColor: Colors.grey.shade900,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadBusinessData,
+              tooltip: 'Refresh',
+            ),
+          ],
+        ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -414,6 +445,92 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                     ],
                   ),
                 ),
+              
+              // GST Card - Moved to top
+              _buildSectionCard(
+                title: 'GST Details',
+                icon: Icons.receipt,
+                subtitle: isVerified 
+                    ? '✓ Verified Business - GST details are locked' 
+                    : 'Add GST to become a verified business',
+                children: [
+                  _buildTextField(
+                    _legalNameController, 
+                    'Legal Business Name', 
+                    Icons.business,
+                    hint: 'Enter your registered business name',
+                    enabled: !isVerified,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    _gstController, 
+                    'GST Number', 
+                    Icons.confirmation_number, 
+                    keyboardType: TextInputType.text,
+                    hint: 'Enter 15-digit GST number',
+                    enabled: !isVerified,
+                    suffix: isVerified 
+                        ? const Icon(Icons.verified, color: Colors.green)
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  if (!isVerified)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _verifyGST,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isVerifyingGST
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Verify GST',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                )),
+                      ),
+                    ),
+                  if (isVerified)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.verified, color: Colors.green.shade700, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'GST verified on ${_gstVerifiedAt != null ? DateFormat('dd MMM yyyy').format(_gstVerifiedAt!) : 'N/A'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              
+              const SizedBox(height: 20),
               
               // Display Info Card
               _buildSectionCard(
@@ -551,95 +668,6 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 ],
               ),
               
-              const SizedBox(height: 20),
-              
-              // GST Card
-              _buildSectionCard(
-                title: 'GST Details',
-                icon: Icons.receipt,
-                subtitle: isVerified 
-                    ? '✓ Verified Business - GST details are locked' 
-                    : 'Add GST to become a verified business',
-                children: [
-                  _buildTextField(
-                    _legalNameController, 
-                    'Legal Business Name', 
-                    Icons.business,
-                    hint: 'Enter your registered business name',
-                    enabled: !isVerified,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    _gstController, 
-                    'GST Number', 
-                    Icons.confirmation_number, 
-                    keyboardType: TextInputType.text,
-                    hint: 'Enter 15-digit GST number',
-                    enabled: !isVerified,
-                    suffix: isVerified 
-                        ? const Icon(Icons.verified, color: Colors.green)
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  if (!isVerified)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _verifyGST,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: _isSaving 
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Text('Verify GST', style: TextStyle(fontWeight: FontWeight.w600)),
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.verified, color: Colors.green.shade700),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'GST Verified',
-                                  style: TextStyle(
-                                    fontSize: 13, 
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green.shade700,
-                                  ),
-                                ),
-                                Text(
-                                  'GST Number: ${_gstController.text.isNotEmpty ? _gstController.text : (_businessData?['gst_number'] ?? '')}',
-                                  style: TextStyle(fontSize: 11, color: Colors.green.shade600),
-                                ),
-                                Text(
-                                  'Verified on ${_gstData?['verified_at']?.toString().split('T').first ?? _businessData?['gst_verified_at']?.toString().split('T').first ?? ''}',
-                                  style: TextStyle(fontSize: 11, color: Colors.green.shade600),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-              
               const SizedBox(height: 24),
               
               // Verification Status Card
@@ -668,6 +696,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

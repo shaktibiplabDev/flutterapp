@@ -118,6 +118,10 @@ class AuthProvider extends ChangeNotifier {
     _invalidateCacheByPrefix('wallet:');
   }
 
+  void invalidateProfileCache() {
+    _responseCache.remove('profile');
+  }
+
   void _invalidateVehicleCache() {
     _invalidateCacheByPrefix('vehicles:');
     _invalidateCacheByPrefix('availableVehicles:');
@@ -361,6 +365,22 @@ class AuthProvider extends ChangeNotifier {
     _passwordResetToken = null;
     _passwordResetEmail = null;
     notifyListeners();
+  }
+
+  // ==================== PROFILE MANAGEMENT ====================
+
+  // Get user profile (API 1.1)
+  Future<Map<String, dynamic>> getProfile({bool forceRefresh = false}) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'profile',
+        ttl: const Duration(minutes: 15),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getProfile(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
   }
 
   // ==================== GOOGLE AUTH (NATIVE) ====================

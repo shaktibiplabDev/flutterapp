@@ -24,7 +24,7 @@ class _BusinessProfileBannerState extends State<BusinessProfileBanner> {
   Future<void> _checkBusinessProfile() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     try {
-      final response = await authProvider.getProfile();
+      final response = await authProvider.getProfile(forceRefresh: true);
       debugPrint('🔍 Profile Response: $response');
       if (mounted) {
         final data = response['data'];
