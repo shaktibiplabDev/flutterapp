@@ -7,6 +7,7 @@ import 'wallet_screen.dart';
 import 'vehicles_screen.dart';
 import 'bookings_screen.dart';
 import 'profile_screen.dart';
+import 'business_profile_screen.dart';
 import 'add_vehicle_screen.dart';
 import 'new_rental_screen.dart';
 import 'reports_screen.dart';
@@ -25,6 +26,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<Map<String, dynamic>> _recentBookings = [];
   Map<String, dynamic> _statistics = {};
   int _unreadNotificationCount = 0;
+  bool _hasBusinessProfile = false;
+  bool _isCheckingBusinessProfile = true;
   late AnimationController _animationController;
 
   @override
@@ -36,7 +39,31 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     _loadDashboardData();
     _loadUnreadNotificationCount();
+    _checkBusinessProfile();
     _animationController.forward();
+  }
+
+  /// Check if user has created business profile
+  Future<void> _checkBusinessProfile() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    try {
+      final response = await authProvider.getBusinessVerificationStatus();
+      if (mounted) {
+        setState(() {
+          _hasBusinessProfile = response['success'] == true && 
+                               response['data'] != null &&
+                               response['data']['is_profile_complete'] == true;
+          _isCheckingBusinessProfile = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking business profile: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingBusinessProfile = false;
+        });
+      }
+    }
   }
 
   @override
@@ -244,6 +271,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 child: user != null && !user.isEmailVerified 
                     ? _buildEmailVerificationWarning(user)
                     : const SizedBox.shrink(),
+              ),
+            ),
+            
+            // Business Profile Required Banner
+            SliverToBoxAdapter(
+              child: FadeInAnimation(
+                delay: 0.15,
+                controller: _animationController,
+                child: _buildBusinessProfileBanner(),
               ),
             ),
             
@@ -566,6 +602,67 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  /// Business profile required banner - shown when business profile is not created
+  Widget _buildBusinessProfileBanner() {
+    if (_isCheckingBusinessProfile || _hasBusinessProfile) return const SizedBox.shrink();
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.business, color: Colors.red.shade700),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Business Profile Required',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+                Text(
+                  'Create your business profile to use all features',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BusinessProfileScreen(),
+                ),
+              ).then((_) => _checkBusinessProfile());
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              backgroundColor: Colors.red.shade100,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Create Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // FIXED: Responsive Stats Grid using Wrap - No overflow on any screen size
   Widget _buildStatsGrid() {
     final statsItems = [
@@ -709,6 +806,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   title: 'New Rental',
                   subtitle: 'Start rental process',
                   color: Colors.green,
+                  enabled: _hasBusinessProfile,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -726,6 +824,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   title: 'Add Vehicle',
                   subtitle: 'Register new vehicle',
                   color: Colors.blue,
+                  enabled: _hasBusinessProfile,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -743,6 +842,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   title: 'Reports',
                   subtitle: 'View analytics',
                   color: Colors.purple,
+                  enabled: _hasBusinessProfile,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -890,20 +990,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Icon(Icons.currency_rupee, size: 12, color: Colors.green.shade700),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        '${_str(vehicle['daily_rate'], fallback: '0')}/day',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.green.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                  _buildRateWidget(vehicle),
                                   Text(
                                     _str(vehicle['number_plate'], fallback: 'No plate'),
                                     style: TextStyle(
@@ -1229,14 +1316,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     required String subtitle,
     required Color color,
     required VoidCallback onTap,
+    bool enabled = true,
   }) {
+    final disabledColor = Colors.grey.shade400;
+    
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : () => _showBusinessRequiredMessage(),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: enabled ? Colors.white : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -1252,33 +1342,60 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: enabled ? color.withOpacity(0.1) : disabledColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 24, color: color),
+              child: Icon(
+                icon, 
+                size: 24, 
+                color: enabled ? color : disabledColor,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: enabled ? Colors.black87 : Colors.grey.shade500,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 2),
             Text(
-              subtitle,
+              enabled ? subtitle : 'Create business profile first',
               style: TextStyle(
                 fontSize: 10,
-                color: Colors.grey.shade500,
+                color: enabled ? Colors.grey.shade500 : Colors.red.shade300,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Show message when user taps disabled button
+  void _showBusinessRequiredMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please create your business profile first to use this feature'),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Create',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const BusinessProfileScreen(),
+              ),
+            ).then((_) => _checkBusinessProfile());
+          },
         ),
       ),
     );
@@ -1299,6 +1416,92 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } catch (e) {
       return 'N/A';
     }
+  }
+
+  // Rate helper methods (same as vehicles_screen.dart)
+  double _getRate(Map<String, dynamic> vehicle, String rateType) {
+    final value = vehicle[rateType];
+    if (value == null) return 0;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString()) ?? 0;
+  }
+
+  String _getFormattedRate(Map<String, dynamic> vehicle, String rateType) {
+    final rate = _getRate(vehicle, rateType);
+    if (rate == 0) return '';
+    return '₹${rate.toStringAsFixed(0)}';
+  }
+
+  /// Build rate widget for vehicle card - shows rate only if defined
+  Widget _buildRateWidget(Map<String, dynamic> vehicle) {
+    final hourlyRate = _getFormattedRate(vehicle, 'hourly_rate');
+    final dailyRate = _getFormattedRate(vehicle, 'daily_rate');
+    final weeklyRate = _getFormattedRate(vehicle, 'weekly_rate');
+    
+    // Build list of available rates
+    final List<Widget> rateWidgets = [];
+    
+    if (hourlyRate.isNotEmpty) {
+      rateWidgets.add(_buildRateChip('Hourly', hourlyRate));
+    }
+    if (dailyRate.isNotEmpty) {
+      rateWidgets.add(_buildRateChip('Daily', dailyRate));
+    }
+    if (weeklyRate.isNotEmpty) {
+      rateWidgets.add(_buildRateChip('Weekly', weeklyRate));
+    }
+    
+    if (rateWidgets.isEmpty) {
+      // No rates defined - show message
+      return Text(
+        'Rate not set',
+        style: TextStyle(
+          fontSize: 11,
+          color: Colors.grey.shade500,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+    
+    // Show the first available rate
+    return Row(
+      children: [
+        Icon(Icons.currency_rupee, size: 12, color: Colors.green.shade700),
+        const SizedBox(width: 2),
+        Text(
+          dailyRate.isNotEmpty ? dailyRate : (hourlyRate.isNotEmpty ? hourlyRate : weeklyRate),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.green.shade700,
+          ),
+        ),
+        Text(
+          dailyRate.isNotEmpty ? '/day' : (hourlyRate.isNotEmpty ? '/hr' : '/wk'),
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.green.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRateChip(String label, String rate) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '$label: $rate',
+        style: TextStyle(
+          fontSize: 10,
+          color: Colors.green.shade700,
+        ),
+      ),
+    );
   }
 }
 

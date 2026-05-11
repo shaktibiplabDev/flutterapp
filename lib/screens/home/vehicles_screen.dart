@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../widgets/business_profile_banner.dart';
 import 'home_screen.dart';
 import 'bookings_screen.dart';
 import 'profile_screen.dart';
@@ -896,6 +897,9 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         color: Colors.black,
         child: Column(
           children: [
+            // Business Profile Banner
+            const BusinessProfileBanner(),
+            
             // Search Bar
             Padding(
               padding: const EdgeInsets.all(16),

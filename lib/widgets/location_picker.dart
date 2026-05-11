@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 
 class LocationPicker extends StatefulWidget {
@@ -119,12 +121,64 @@ class _LocationPickerState extends State<LocationPicker> with SingleTickerProvid
   Future<void> _getCurrentLocation() async {
     setState(() => _isLoadingLocation = true);
     
-    // Note: For actual GPS, you'd need geolocator package
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    _mapController.move(_currentLocation, 16);
-    
-    setState(() => _isLoadingLocation = false);
+    try {
+      // Check and request location permission
+      var status = await Permission.location.status;
+      
+      if (status.isDenied) {
+        status = await Permission.location.request();
+      }
+      
+      if (status.isPermanentlyDenied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Location permission is required. Please enable it in Settings.'),
+              action: SnackBarAction(
+                label: 'Settings',
+                onPressed: () => openAppSettings(),
+              ),
+            ),
+          );
+        }
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+      
+      if (status.isGranted) {
+        // Get current position
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        
+        setState(() {
+          _currentLocation = LatLng(position.latitude, position.longitude);
+        });
+        
+        _mapController.move(_currentLocation, 16);
+        
+        // Reverse geocode to get address
+        await _reverseGeocode(position.latitude, position.longitude);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Current location fetched'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error getting location: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isLoadingLocation = false);
+    }
   }
 
   Future<void> _reverseGeocode(double lat, double lng) async {

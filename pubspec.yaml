@@ -55,6 +55,7 @@ dependencies:
   open_file: ^3.3.2
   permission_handler: ^11.3.0
   flutter_slidable: ^3.0.0
+  geolocator: ^10.1.0
 
   # Desktop Support
   window_manager: ^0.3.9  # For Linux/Windows window management

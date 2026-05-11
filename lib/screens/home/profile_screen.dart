@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../models/user_model.dart';
+import '../../widgets/business_profile_banner.dart';
 import 'home_screen.dart';
 import 'vehicles_screen.dart';
 import 'bookings_screen.dart';
@@ -410,6 +411,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Business Profile Banner
+              const BusinessProfileBanner(),
+              
               // Account Profile Card
               Container(
                 margin: const EdgeInsets.all(16),
