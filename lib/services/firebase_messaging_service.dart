@@ -134,13 +134,13 @@ class FirebaseMessagingService {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
     // Foreground handler
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       debugPrint('📨=== FOREGROUND MESSAGE RECEIVED ===');
       debugPrint('📨 Message ID: ${message.messageId}');
       debugPrint('📨 Title: ${message.notification?.title}');
       debugPrint('📨 Body: ${message.notification?.body}');
       debugPrint('📨 Data: ${message.data}');
-      _handleForegroundMessage(message);
+      await _handleForegroundMessage(message);
     });
 
     // Message opened app (when app is in background/terminated)
@@ -158,7 +158,7 @@ class FirebaseMessagingService {
   }
 
   /// Handle foreground messages by showing local notification
-  void _handleForegroundMessage(RemoteMessage message) {
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('📨 Handling foreground message: ${message.messageId}');
     debugPrint('📨 Message data: ${message.data}');
     
