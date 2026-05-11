@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'providers/auth_provider.dart';
 import 'services/google_auth_service.dart';
-import 'services/api_interceptor.dart'; // Add this import
+import 'services/api_interceptor.dart';
+import 'services/firebase_messaging_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
@@ -21,9 +24,36 @@ import 'screens/home/settings_screen.dart';
 import 'screens/legal/legal_page_screen.dart';
 import 'screens/auth/email_verification_required_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   GoogleAuthService.initialize();
+
+  // Initialize Firebase Messaging
+  final firebaseMessaging = FirebaseMessagingService();
+  await firebaseMessaging.initialize();
+
+  // Initialize Crashlytics
+  await _initializeCrashlytics();
+
   runApp(const MyApp());
+}
+
+Future<void> _initializeCrashlytics() async {
+  // Pass all uncaught "fatal" errors from the framework to Crashlytics
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  };
+
+  // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
+  // Enable Crashlytics in all modes (including debug for testing)
+  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+  debugPrint('📊 Crashlytics enabled for testing');
 }
 
 class MyApp extends StatelessWidget {

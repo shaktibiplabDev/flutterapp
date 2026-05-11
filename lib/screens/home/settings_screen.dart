@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_service.dart';
 import '../legal/legal_page_screen.dart';
 
@@ -74,6 +75,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
   }
+
+  /// Handle push notification toggle with permission request
+  Future<void> _onNotificationToggle(bool value) async {
+    if (value) {
+      // User is turning ON notifications - request permission
+      final status = await Permission.notification.request();
+      
+      if (status.isGranted) {
+        // Permission granted - enable notifications
+        setState(() => _notificationsEnabled = true);
+        _updateSetting('notifications_enabled', true, 'boolean');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Notifications enabled'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else if (status.isDenied) {
+        // Permission denied - keep toggle OFF
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permission denied. Enable notifications in Settings > Apps.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else if (status.isPermanentlyDenied) {
+        // User selected "Don't ask again" - show dialog to open settings
+        _showOpenSettingsDialog();
+      }
+    } else {
+      // User is turning OFF notifications
+      setState(() => _notificationsEnabled = false);
+      _updateSetting('notifications_enabled', false, 'boolean');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notifications disabled'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Show dialog to open system settings when permission is permanently denied
+  void _showOpenSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Notification Permission Required'),
+        content: const Text(
+          'Notifications are disabled. Please enable them in System Settings > Apps > EKiraya > Notifications.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              openAppSettings();
+              Navigator.pop(context);
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
   
   @override
   Widget build(BuildContext context) {
@@ -97,10 +174,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Push Notifications'),
               subtitle: const Text('Receive push notifications for updates'),
               value: _notificationsEnabled,
-              onChanged: (value) {
-                setState(() => _notificationsEnabled = value);
-                _updateSetting('notifications_enabled', value, 'boolean');
-              },
+              onChanged: (value) => _onNotificationToggle(value),
               secondary: Icon(Icons.notifications, color: Colors.grey.shade600),
             ),
             SwitchListTile(

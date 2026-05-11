@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1078723520604",
+    "project_id": "ekiraya-7af36",
+    "storage_bucket": "ekiraya-7af36.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1078723520604:android:05ebb73c0f335711331e99",
+        "android_client_info": {
+          "package_name": "com.versaero.ekiraya"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrqwLzZetkGbnq9-XEb8VgO3lUIubRo0A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

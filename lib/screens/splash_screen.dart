@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/firebase_messaging_service.dart';
 import 'auth/login_screen.dart';
 import 'home/home_screen.dart';
 
@@ -151,11 +152,14 @@ class _SplashScreenState extends State<SplashScreen>
         
         // Validate token by fetching current user
         final isValid = await authProvider.validateToken();
-        
+
         if (isValid && mounted) {
           // Refresh user data to get latest info
           await authProvider.refreshUser();
-          
+
+          // Register device for push notifications (existing session)
+          await FirebaseMessagingService().registerDeviceAfterLogin();
+
           // Double check authentication after refresh
           if (authProvider.isAuthenticated && mounted) {
             // Navigate to home screen

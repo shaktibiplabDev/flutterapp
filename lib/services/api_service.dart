@@ -2209,4 +2209,45 @@ class ApiService {
 
     return json.decode(response.body);
   }
+
+  // ==================== NOTIFICATIONS ====================
+
+  /// Register device for push notifications
+  Future<Map<String, dynamic>> registerDevice({
+    required String token,
+    required String platform,
+    required String deviceName,
+    required String appVersion,
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/notifications/devices/register'),
+        headers: headers,
+        body: json.encode({
+          'token': token,
+          'platform': platform,
+          'device_name': deviceName,
+          'app_version': appVersion,
+        }),
+      );
+
+      if (_isUnauthorized(response)) {
+        await _handleUnauthorizedResponse();
+        return {
+          'success': false,
+          'message': 'Session expired. Please login again.',
+          'unauthorized': true
+        };
+      }
+
+      return json.decode(response.body);
+    } catch (e) {
+      debugPrint('Register device error: $e');
+      return {
+        'success': false,
+        'message': 'Failed to register device: $e',
+      };
+    }
+  }
 }

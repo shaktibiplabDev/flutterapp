@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/google_auth_service.dart';
 import '../services/api_interceptor.dart';
+import '../services/firebase_messaging_service.dart';
 
 class _CacheEntry<T> {
   final T data;
@@ -192,6 +193,8 @@ class AuthProvider extends ChangeNotifier {
         if (response['data']['user'] != null) {
           _user = User.fromJson(response['data']['user']);
         }
+        // Register device for push notifications
+        FirebaseMessagingService().registerDeviceAfterLogin();
         _setLoading(false);
         return true;
       } else {
@@ -376,6 +379,8 @@ class AuthProvider extends ChangeNotifier {
         if (result['data']['user'] != null) {
           _user = User.fromJson(result['data']['user']);
         }
+        // Register device for push notifications
+        FirebaseMessagingService().registerDeviceAfterLogin();
         _needsPhoneForGoogle = false;
         _pendingGoogleIdToken = null;
         _pendingGoogleData = null;
@@ -422,6 +427,8 @@ class AuthProvider extends ChangeNotifier {
         if (result['data']['user'] != null) {
           _user = User.fromJson(result['data']['user']);
         }
+        // Register device for push notifications
+        FirebaseMessagingService().registerDeviceAfterLogin();
 
         _pendingGoogleIdToken = null;
         _pendingGoogleData = null;
@@ -1710,6 +1717,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     _setLoading(true);
     try {
+      // Unregister device from push notifications
+      await FirebaseMessagingService().unregisterDevice();
       await _apiService.logout();
       await GoogleAuthService.signOut();
       _user = null;

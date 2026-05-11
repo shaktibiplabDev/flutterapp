@@ -13,6 +13,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -30,6 +31,10 @@ android {
         versionName = flutter.versionName
     }
 
+    dependencies {
+        coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -42,3 +47,7 @@ android {
 flutter {
     source = "../.."
 }
+
+// Apply Firebase plugins
+apply(plugin = "com.google.gms.google-services")
+apply(plugin = "com.google.firebase.crashlytics")
