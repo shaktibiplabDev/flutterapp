@@ -271,15 +271,25 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       );
       
       if (displayResponse['success'] != true) {
-        throw Exception(displayResponse['message'] ?? 'Failed to update business info');
+        final errorMessage = displayResponse['message'] ?? 'Failed to update business info';
+        debugPrint('Business Profile Update Error: $errorMessage');
+        debugPrint('Full Response: ${displayResponse.toString()}');
+        throw Exception(errorMessage);
       }
       
       if (_location != null) {
-        await apiService.updateBusinessLocation(
+        final locationResponse = await apiService.updateBusinessLocation(
           latitude: _location!.latitude,
           longitude: _location!.longitude,
           address: _displayAddressController.text,
         );
+        
+        if (locationResponse['success'] != true) {
+          final errorMessage = locationResponse['message'] ?? 'Failed to update business location';
+          debugPrint('Business Location Update Error: $errorMessage');
+          debugPrint('Full Location Response: ${locationResponse.toString()}');
+          throw Exception(errorMessage);
+        }
       }
       
       if (mounted) {
@@ -297,13 +307,35 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         await _loadBusinessData();
       }
     } catch (e) {
+      debugPrint('Error saving business profile: $e');
       if (mounted) {
+        String errorMessage = 'Error: ${e.toString()}';
+        
+        // Check for specific error types
+        if (e.toString().toLowerCase().contains('connection') || 
+            e.toString().toLowerCase().contains('network') ||
+            e.toString().toLowerCase().contains('timeout')) {
+          errorMessage = 'Network error occurred. Please check your internet connection and try again.';
+        } else if (e.toString().toLowerCase().contains('hostname') ||
+                   e.toString().toLowerCase().contains('server') ||
+                   e.toString().toLowerCase().contains('500')) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 3),
+            duration: Duration(seconds: 4),
+            action: e.toString().toLowerCase().contains('network') ? SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () {
+                // Retry the save operation
+                _saveBusinessProfile();
+              },
+            ) : null,
           ),
         );
       }
@@ -361,11 +393,33 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Error: ${e.toString()}';
+        
+        // Check for specific error types
+        if (e.toString().toLowerCase().contains('connection') || 
+            e.toString().toLowerCase().contains('network') ||
+            e.toString().toLowerCase().contains('timeout')) {
+          errorMessage = 'Network error occurred. Please check your internet connection and try again.';
+        } else if (e.toString().toLowerCase().contains('hostname') ||
+                   e.toString().toLowerCase().contains('server') ||
+                   e.toString().toLowerCase().contains('500')) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
+            action: e.toString().toLowerCase().contains('network') ? SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () {
+                // Retry GST verification
+                _verifyGST();
+              },
+            ) : null,
           ),
         );
       }

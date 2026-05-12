@@ -795,6 +795,22 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // Get all rentals (including pending ones)
+  Future<Map<String, dynamic>> getAllRentals({
+    bool forceRefresh = false,
+  }) async {
+    try {
+      return await _cachedMapRequest(
+        key: 'rentals:all',
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
+        request: () => _apiService.getAllRentals(),
+      );
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // Get active rentals
   Future<Map<String, dynamic>> getActiveRentals({
     bool forceRefresh = false,

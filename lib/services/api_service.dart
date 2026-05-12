@@ -969,6 +969,26 @@ class ApiService {
     return json.decode(response.body);
   }
 
+  // Get all rentals (including pending ones)
+  Future<Map<String, dynamic>> getAllRentals() async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/rentals'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
   // Get active rentals
   Future<Map<String, dynamic>> getActiveRentals() async {
     final headers = await getHeaders();
@@ -1704,15 +1724,22 @@ class ApiService {
     required String email,
   }) async {
     final headers = await getHeaders();
+    final requestBody = json.encode({
+      'display_name': displayName,
+      'display_address': displayAddress,
+      'phone': phone,
+      'email': email,
+    });
+    
+    debugPrint('=== Business Display Update Request ===');
+    debugPrint('URL: $baseUrl/profile/business/display');
+    debugPrint('Headers: $headers');
+    debugPrint('Body: $requestBody');
+    
     final response = await http.put(
       Uri.parse('$baseUrl/profile/business/display'),
       headers: headers,
-      body: json.encode({
-        'display_name': displayName,
-        'display_address': displayAddress,
-        'phone': phone,
-        'email': email,
-      }),
+      body: requestBody,
     );
 
     if (_isUnauthorized(response)) {

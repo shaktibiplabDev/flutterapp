@@ -95,6 +95,17 @@ class _BookingsScreenState extends State<BookingsScreen> {
     ]);
   }
 
+  Future<Map<String, dynamic>> _getAllRentals() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    try {
+      final response = await authProvider.getAllRentals();
+      return response;
+    } catch (e) {
+      print('Error fetching all rentals: $e');
+      return {'success': false, 'data': []};
+    }
+  }
+
   Future<void> _loadBookings() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
@@ -102,14 +113,17 @@ class _BookingsScreenState extends State<BookingsScreen> {
       final results = await Future.wait([
         authProvider.getActiveRentals(),
         authProvider.getRentalHistory(perPage: 100),
+        _getAllRentals(), // Add this to get pending rentals
       ]);
 
       final activeResponse = results[0];
       final historyResponse = results[1];
+      final allRentalsResponse = results[2];
 
       final allBookings = <Map<String, dynamic>>[
         ..._extractBookingList(activeResponse['data']),
         ..._extractBookingList(historyResponse['data']),
+        ..._extractBookingList(allRentalsResponse['data']), // Add pending rentals
       ];
 
       final deduped = <String, Map<String, dynamic>>{};
