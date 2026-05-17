@@ -46,8 +46,13 @@ class _SetupPasswordScreenState extends State<SetupPasswordScreen>
 
     _animationController.forward();
 
-    // Add password listener for strength indicator
+    // Add listeners to trigger state updates when typing
     _passwordController.addListener(_updatePasswordStrength);
+    _confirmPasswordController.addListener(_onConfirmPasswordChanged);
+  }
+
+  void _onConfirmPasswordChanged() {
+    if (mounted) setState(() {});
   }
 
   void _updatePasswordStrength() {
@@ -122,6 +127,7 @@ class _SetupPasswordScreenState extends State<SetupPasswordScreen>
   void dispose() {
     _animationController.dispose();
     _passwordController.removeListener(_updatePasswordStrength);
+    _confirmPasswordController.removeListener(_onConfirmPasswordChanged);
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();

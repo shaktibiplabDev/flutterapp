@@ -84,6 +84,7 @@ dependencies:
   # Device Info
   package_info_plus: ^5.0.1
   device_info_plus: ^9.1.1
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:

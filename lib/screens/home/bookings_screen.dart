@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../utils/image_utils.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/business_profile_banner.dart';
@@ -367,10 +368,13 @@ class _BookingsScreenState extends State<BookingsScreen> {
                               final picker = ImagePicker();
                               final pickedFiles = await picker.pickMultiImage();
                               if (pickedFiles.isNotEmpty) {
+                                // Convert all images to JPEG before storing
+                                final rawFiles = pickedFiles
+                                    .map((image) => File(image.path))
+                                    .toList();
+                                final jpegFiles = await convertMultipleToJpeg(rawFiles);
                                 setState(() {
-                                  damageImages = pickedFiles
-                                      .map((image) => File(image.path))
-                                      .toList();
+                                  damageImages = jpegFiles;
                                 });
                               }
                             },
@@ -715,7 +719,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
         ),
         title: const Text('Cancel Rental'),
         content: Text(
-          'Are you sure you want to cancel this rental? Verification fee (₹5) is non-refundable.',
+          'Are you sure you want to cancel this rental? Verification fee (₹3) is non-refundable.',
         ),
         actions: [
           TextButton(

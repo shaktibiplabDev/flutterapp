@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:http/http.dart' as http;
 import 'api_service.dart';
 
 // Background message handler - must be top-level function
@@ -37,6 +38,12 @@ class FirebaseMessagingService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onNotificationTap =>
       _notificationTapController.stream;
+
+  // Stream controller for foreground messages
+  final _foregroundMessageController = 
+      StreamController<RemoteMessage>.broadcast();
+  Stream<RemoteMessage> get onForegroundMessage =>
+      _foregroundMessageController.stream;
 
   /// Initialize Firebase and setup messaging
   Future<void> initialize() async {
@@ -140,6 +147,7 @@ class FirebaseMessagingService {
       debugPrint('📨 Title: ${message.notification?.title}');
       debugPrint('📨 Body: ${message.notification?.body}');
       debugPrint('📨 Data: ${message.data}');
+      _foregroundMessageController.add(message);
       await _handleForegroundMessage(message);
     });
 
@@ -170,6 +178,20 @@ class FirebaseMessagingService {
 
     if (notification != null) {
       debugPrint('📨 Showing local notification: ${notification.title}');
+      
+      AndroidBitmap<Object>? largeIcon;
+      final imageUrl = message.data['image'];
+      if (imageUrl != null && imageUrl.toString().isNotEmpty) {
+        try {
+          final response = await http.get(Uri.parse(imageUrl.toString()));
+          if (response.statusCode == 200) {
+            largeIcon = ByteArrayAndroidBitmap(response.bodyBytes);
+          }
+        } catch (e) {
+          debugPrint('Error downloading image for largeIcon: $e');
+        }
+      }
+
       try {
         await _localNotifications.show(
           notification.hashCode,
@@ -185,6 +207,7 @@ class FirebaseMessagingService {
               priority: Priority.high,
               showWhen: true,
               icon: android?.smallIcon ?? '@mipmap/ic_launcher',
+              largeIcon: largeIcon,
             ),
             iOS: const DarwinNotificationDetails(
               presentAlert: true,
@@ -210,8 +233,13 @@ class FirebaseMessagingService {
 
     // Navigate based on notification type
     final type = data['type'] ?? data['notification_type'];
+    final category = data['category'];
+    final image = data['image'];
     final rentalId = data['rental_id'];
     final vehicleId = data['vehicle_id'];
+    
+    if (category != null) debugPrint('🔔 Category: $category');
+    if (image != null) debugPrint('🔔 Image: $image');
 
     // The actual navigation should be handled by a navigator service
     // or by listening to onNotificationTap stream in the UI
@@ -373,5 +401,6 @@ class FirebaseMessagingService {
   /// Dispose resources
   void dispose() {
     _notificationTapController.close();
+    _foregroundMessageController.close();
   }
 }

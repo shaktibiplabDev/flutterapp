@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../utils/image_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
@@ -163,8 +164,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   imageQuality: 80,
                 );
                 if (image != null && mounted) {
+                  // Convert to JPEG before storing
+                  final File jpegFile = await convertToJpeg(File(image.path));
                   setState(() {
-                    _selectedLogo = File(image.path);
+                    _selectedLogo = jpegFile;
                   });
                   await _uploadLogo();
                 }
@@ -180,8 +183,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   imageQuality: 80,
                 );
                 if (image != null && mounted) {
+                  // Convert to JPEG before storing
+                  final File jpegFile = await convertToJpeg(File(image.path));
                   setState(() {
-                    _selectedLogo = File(image.path);
+                    _selectedLogo = jpegFile;
                   });
                   await _uploadLogo();
                 }

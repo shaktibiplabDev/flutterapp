@@ -15,17 +15,17 @@ class GoogleAuthService {
     _googleSignIn = GoogleSignIn(
       scopes: ['email', 'profile'],
       // Android client ID (for the app)
-      clientId: '924911513590-6q5f30o660q0pfpog1209aft28qtn7ju.apps.googleusercontent.com',
+      clientId: '1078723520604-tuke2dok6s5tmo17j0a3pgqh4l3impn7.apps.googleusercontent.com',
       // Web client ID (for backend verification - optional but recommended)
-      serverClientId: '924911513590-v887ka40ue2t7jnh24fadhk3bqc9mh5i.apps.googleusercontent.com',
+      serverClientId: '1078723520604-8281ge4ct156f7tu749vb9svam5qpt4o.apps.googleusercontent.com',
     );
   }
   
   static GoogleSignIn get instance {
     _googleSignIn ??= GoogleSignIn(
       scopes: ['email', 'profile'],
-      clientId: '924911513590-6q5f30o660q0pfpog1209aft28qtn7ju.apps.googleusercontent.com',
-      serverClientId: '924911513590-v887ka40ue2t7jnh24fadhk3bqc9mh5i.apps.googleusercontent.com',
+      clientId: '1078723520604-tuke2dok6s5tmo17j0a3pgqh4l3impn7.apps.googleusercontent.com',
+      serverClientId: '1078723520604-8281ge4ct156f7tu749vb9svam5qpt4o.apps.googleusercontent.com',
     );
     return _googleSignIn!;
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/image_utils.dart';
 import '../../models/user_model.dart';
 import '../../services/api_service.dart'; 
 
@@ -90,8 +91,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   imageQuality: 80,
                 );
                 if (image != null) {
+                  // Convert to JPEG before storing
+                  final File jpegFile = await convertToJpeg(File(image.path));
                   setState(() {
-                    _selectedImage = File(image.path);
+                    _selectedImage = jpegFile;
                   });
                 }
               },
@@ -106,8 +109,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   imageQuality: 80,
                 );
                 if (image != null) {
+                  // Convert to JPEG before storing
+                  final File jpegFile = await convertToJpeg(File(image.path));
                   setState(() {
-                    _selectedImage = File(image.path);
+                    _selectedImage = jpegFile;
                   });
                 }
               },

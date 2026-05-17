@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import '../../utils/image_utils.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import '../../providers/auth_provider.dart';
@@ -225,11 +226,13 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
     if (pickedFile != null) {
+      // Convert to JPEG before storing
+      final File jpegFile = await convertToJpeg(File(pickedFile.path));
       setState(() {
         if (isLicense) {
-          _licenseImage = File(pickedFile.path);
+          _licenseImage = jpegFile;
         } else {
-          _aadhaarImage = File(pickedFile.path);
+          _aadhaarImage = jpegFile;
         }
       });
     }
@@ -370,8 +373,10 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
     if (pickedFile != null) {
+      // Convert to JPEG before storing
+      final File jpegFile = await convertToJpeg(File(pickedFile.path));
       setState(() {
-        _signedAgreementImage = File(pickedFile.path);
+        _signedAgreementImage = jpegFile;
       });
     }
   }
@@ -434,8 +439,10 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
     if (pickedFile != null) {
+      // Convert to JPEG before storing
+      final File jpegFile = await convertToJpeg(File(pickedFile.path));
       setState(() {
-        _customerWithVehicleImage = File(pickedFile.path);
+        _customerWithVehicleImage = jpegFile;
       });
     }
   }
@@ -922,72 +929,135 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
                     ],
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _filteredVehicles.length,
-                  itemBuilder: (context, index) {
-                    final vehicle = _filteredVehicles[index];
-                    final isAvailable = vehicle['status']?.toString().toLowerCase() == 'available';
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: _selectedVehicle?['id'] == vehicle['id'] ? Colors.grey.shade100 : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _selectedVehicle?['id'] == vehicle['id'] ? Colors.black : Colors.grey.shade200,
-                          width: _selectedVehicle?['id'] == vehicle['id'] ? 2 : 1,
-                        ),
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Calculate responsive cross axis count
+                    int crossAxisCount = 3; // Default for small screens
+                    if (constraints.maxWidth > 500) {
+                      crossAxisCount = 4; // For medium screens
+                    }
+                    if (constraints.maxWidth > 700) {
+                      crossAxisCount = 5; // For larger screens
+                    }
+                    if (constraints.maxWidth > 900) {
+                      crossAxisCount = 6; // For very large screens
+                    }
+                    
+                    return GridView.builder(
+                      padding: const EdgeInsets.all(12),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 0.8,
                       ),
-                      child: ListTile(
-                        onTap: isAvailable ? () => setState(() => _selectedVehicle = vehicle) : null,
-                        leading: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            vehicle['type'] == 'car' || vehicle['type'] == 'SUV' ? Icons.directions_car : Icons.motorcycle,
-                            size: 30,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        title: Text(
-                          vehicle['name'] ?? 'Unknown',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: isAvailable ? Colors.grey.shade900 : Colors.grey.shade500,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '₹${vehicle['daily_rate'] ?? 0}/day • ${vehicle['number_plate'] ?? ''}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                        ),
-                        trailing: isAvailable
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'Available',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green),
-                                ),
-                              )
-                            : Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'Unavailable',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.red),
-                                ),
+                      itemCount: _filteredVehicles.length,
+                      itemBuilder: (context, index) {
+                        final vehicle = _filteredVehicles[index];
+                        final isAvailable = vehicle['status']?.toString().toLowerCase() == 'available';
+                        final isSelected = _selectedVehicle?['id'] == vehicle['id'];
+                        
+                        return GestureDetector(
+                          onTap: isAvailable ? () => setState(() => _selectedVehicle = vehicle) : null,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.grey.shade100 : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? Colors.black : Colors.grey.shade200,
+                                width: isSelected ? 2 : 1,
                               ),
-                      ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.shade100,
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Vehicle Icon
+                                Expanded(
+                                  flex: 3,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Center(
+                                      child: Icon(
+                                        vehicle['type'] == 'car' || vehicle['type'] == 'SUV' ? Icons.directions_car : Icons.motorcycle,
+                                        size: 36,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Vehicle Info
+                                Expanded(
+                                  flex: 4,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              vehicle['name'] ?? 'Unknown',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: isAvailable ? Colors.grey.shade900 : Colors.grey.shade500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              vehicle['number_plate'] ?? '',
+                                              style: TextStyle(
+                                                fontSize: 8,
+                                                color: Colors.grey.shade600,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        // Price and Status
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // Dynamic price display
+                                            _buildPriceDisplay(vehicle),
+                                            const SizedBox(height: 4),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: isAvailable ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                isAvailable ? 'Available' : 'Unavailable',
+                                                style: TextStyle(
+                                                  fontSize: 7,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isAvailable ? Colors.green : Colors.red,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -1013,6 +1083,74 @@ class _NewRentalScreenState extends State<NewRentalScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildPriceDisplay(Map<String, dynamic> vehicle) {
+    final hourlyRate = double.tryParse(vehicle['hourly_rate']?.toString() ?? '0') ?? 0;
+    final dailyRate = double.tryParse(vehicle['daily_rate']?.toString() ?? '0') ?? 0;
+    
+    if (hourlyRate > 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '₹$hourlyRate',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '/hr',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    } else if (dailyRate > 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '₹$dailyRate',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '/day',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    } else {
+      return Text(
+            'Price on request',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+            ),
+          );
+    }
   }
 
   Widget _buildPhaseScreen() {

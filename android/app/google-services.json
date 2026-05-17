@@ -12,7 +12,20 @@
           "package_name": "com.versaero.ekiraya"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1078723520604-tuke2dok6s5tmo17j0a3pgqh4l3impn7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.versaero.ekiraya",
+            "certificate_hash": "a3cbbef26690a15c106727575930037564ace1c5"
+          }
+        },
+        {
+          "client_id": "1078723520604-8281ge4ct156f7tu749vb9svam5qpt4o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCrqwLzZetkGbnq9-XEb8VgO3lUIubRo0A"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1078723520604-8281ge4ct156f7tu749vb9svam5qpt4o.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

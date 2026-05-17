@@ -408,7 +408,7 @@ class _RentalDetailScreenState extends State<RentalDetailScreen> with SingleTick
                       Column(
                         children: [
                           const Divider(height: 24),
-                          _buildInfoRow('Verification', 'Cached (₹5 saved)', valueColor: Colors.green),
+                          _buildInfoRow('Verification', 'Cached (₹3 saved)', valueColor: Colors.green),
                         ],
                       ),
                     const Divider(height: 24),

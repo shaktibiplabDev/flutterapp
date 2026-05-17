@@ -1383,6 +1383,93 @@ class ApiService {
     return json.decode(response.body);
   }
 
+  // Get specific notification details
+  Future<Map<String, dynamic>> getNotificationDetails(int notificationId) async {
+    final headers = await getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/notifications/$notificationId'),
+      headers: headers,
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Get notifications filtered by type
+  Future<Map<String, dynamic>> getNotificationsByType({
+    required String type,
+    int perPage = 20,
+    int page = 1,
+  }) async {
+    final headers = await getHeaders();
+    final queryParams = {
+      'per_page': perPage.toString(),
+      'page': page.toString(),
+    };
+
+    final uri = Uri.parse('$baseUrl/notifications/type/$type')
+        .replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
+  // Send/Trigger a notification
+  Future<Map<String, dynamic>> sendNotification({
+    required String title,
+    required String message,
+    String type = 'info',
+    Map<String, dynamic>? data,
+    String? description,
+    String? category,
+    String? image,
+  }) async {
+    final headers = await getHeaders();
+    final body = {
+      'title': title,
+      'message': message,
+      'type': type,
+      if (data != null) 'data': data,
+      if (description != null) 'description': description,
+      if (category != null) 'category': category,
+      if (image != null) 'image': image,
+    };
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/notifications/send'),
+      headers: headers,
+      body: json.encode(body),
+    );
+
+    if (_isUnauthorized(response)) {
+      await _handleUnauthorizedResponse();
+      return {
+        'success': false,
+        'message': 'Session expired. Please login again.',
+        'unauthorized': true
+      };
+    }
+
+    return json.decode(response.body);
+  }
+
   // Get unread notifications count
   Future<Map<String, dynamic>> getUnreadNotificationsCount() async {
     final headers = await getHeaders();

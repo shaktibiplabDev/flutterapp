@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../home/home_screen.dart';
+import 'login_screen.dart';
 
 class GooglePhoneScreen extends StatefulWidget {
   const GooglePhoneScreen({super.key});
@@ -485,7 +486,10 @@ class _GooglePhoneScreenState extends State<GooglePhoneScreen>
                       ),
                       child: TextButton(
                         onPressed: () {
-                          Navigator.pop(context);
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          );
                         },
                         style: TextButton.styleFrom(
                           shape: RoundedRectangleBorder(
